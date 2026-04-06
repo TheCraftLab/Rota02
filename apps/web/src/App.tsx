@@ -490,67 +490,63 @@ export default function App() {
         ) : null}
 
         {deferredRotation ? (
-          <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.5fr)_minmax(22rem,0.9fr)]">
-            <div className="layout-safe min-w-0 grid gap-6">
-              <section className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    className="rounded-full bg-amber px-5 py-3 text-sm font-semibold text-white"
-                    onClick={() => void handlePublish()}
-                    disabled={publishLoading}
-                  >
-                    {publishLoading ? "Publication..." : "Publier sur l'index"}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white"
-                    onClick={() => void handleExport("xlsx")}
-                    disabled={exportLoading !== null}
-                  >
-                    {exportLoading === "xlsx" ? "Export Excel..." : "Exporter en .xlsx"}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-slate/15 bg-white px-5 py-3 text-sm font-semibold text-slate"
-                    onClick={() => void handleExport("pdf")}
-                    disabled={exportLoading !== null}
-                  >
-                    {exportLoading === "pdf" ? "Export PDF..." : "Exporter en .pdf"}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-slate/15 bg-white px-5 py-3 text-sm font-semibold text-slate"
-                    onClick={() => void handleExport("csv")}
-                    disabled={exportLoading !== null}
-                  >
-                    {exportLoading === "csv" ? "Export CSV..." : "Exporter en .csv"}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-slate/15 bg-white px-5 py-3 text-sm font-semibold text-slate"
-                    onClick={() => void handleCopy()}
-                    disabled={exportLoading !== null}
-                  >
-                    {exportLoading === "copy" ? "Copie..." : "Copier le tableau"}
-                  </button>
-                </div>
-              </section>
-              <RotationTable
-                rotation={deferredRotation}
-                selectedCellKey={selectedCellKey}
-                onSelectCell={(cell) => setSelectedCellKey(cellKey(cell))}
-              />
-              <SummaryPanel rotation={deferredRotation} />
-            </div>
-            <div className="layout-safe min-w-0">
-              <InspectorDrawer
-                cell={selectedCell}
-                agents={parsedSchedule?.agents ?? []}
-                onClose={() => setSelectedCellKey(null)}
-                onManualAssign={handleManualAssign}
-              />
-            </div>
+          <div className="grid gap-6">
+            <section className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className="rounded-full bg-amber px-5 py-3 text-sm font-semibold text-white"
+                  onClick={() => void handlePublish()}
+                  disabled={publishLoading}
+                >
+                  {publishLoading ? "Publication..." : "Publier sur l'index"}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white"
+                  onClick={() => void handleExport("xlsx")}
+                  disabled={exportLoading !== null}
+                >
+                  {exportLoading === "xlsx" ? "Export Excel..." : "Exporter en .xlsx"}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-slate/15 bg-white px-5 py-3 text-sm font-semibold text-slate"
+                  onClick={() => void handleExport("pdf")}
+                  disabled={exportLoading !== null}
+                >
+                  {exportLoading === "pdf" ? "Export PDF..." : "Exporter en .pdf"}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-slate/15 bg-white px-5 py-3 text-sm font-semibold text-slate"
+                  onClick={() => void handleExport("csv")}
+                  disabled={exportLoading !== null}
+                >
+                  {exportLoading === "csv" ? "Export CSV..." : "Exporter en .csv"}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-slate/15 bg-white px-5 py-3 text-sm font-semibold text-slate"
+                  onClick={() => void handleCopy()}
+                  disabled={exportLoading !== null}
+                >
+                  {exportLoading === "copy" ? "Copie..." : "Copier le tableau"}
+                </button>
+              </div>
+            </section>
+            <RotationTable
+              rotation={deferredRotation}
+              selectedCellKey={selectedCellKey}
+              onSelectCell={(cell) => setSelectedCellKey(cellKey(cell))}
+            />
+            <SummaryPanel rotation={deferredRotation} />
+            <InspectorDrawer
+              cell={selectedCell}
+              agents={parsedSchedule?.agents ?? []}
+              onClose={() => setSelectedCellKey(null)}
+              onManualAssign={handleManualAssign}
+            />
           </div>
         ) : (
           <section className="panel-surface rounded-4xl border border-white/70 p-10 text-center shadow-panel">

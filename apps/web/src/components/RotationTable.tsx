@@ -1,4 +1,5 @@
 import { formatDisplayDate, formatWeekday, type RotationCell, type RotationResult } from "@rota/core";
+import { StatusBadge } from "./StatusBadge";
 
 interface RotationTableProps {
   rotation: RotationResult;
@@ -24,6 +25,7 @@ export function RotationTable({
   density = "default"
 }: RotationTableProps) {
   const isKiosk = density === "kiosk";
+  const manualCount = rotation.cells.filter((cell) => cell.status === "manual").length;
 
   return (
     <section className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
@@ -33,6 +35,13 @@ export function RotationTable({
           <h2 className={`mt-2 font-semibold text-ink ${isKiosk ? "text-3xl sm:text-4xl" : "text-2xl"}`}>{title}</h2>
           <p className={`mt-2 text-slate ${isKiosk ? "text-base" : "text-sm"}`}>{description}</p>
         </div>
+        {manualCount > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge tone="warning">
+              {manualCount} modification(s) manuelle(s) en jaune
+            </StatusBadge>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid-table max-w-full overflow-x-auto overflow-y-auto rounded-3xl border border-slate/10 bg-white/80">
@@ -84,10 +93,10 @@ export function RotationTable({
                   const selected = selectedCellKey === cellKey(cell);
                   const tone =
                     cell.status === "uncovered"
-                      ? "bg-coral/10 text-coral"
+                      ? "border-coral/30 bg-coral/10 text-coral"
                       : cell.status === "manual"
-                        ? "bg-amber/10 text-amber"
-                        : "bg-mint/10 text-ink";
+                        ? "border-amber/40 bg-amber/25 text-amber"
+                        : "border-mint/20 bg-mint/10 text-ink";
 
                   return (
                     <td
