@@ -1,0 +1,23 @@
+{
+  "name": "rota-chat-generator",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n core,server,web -c cyan,yellow,magenta \"npm run dev -w @rota/core\" \"npm run dev -w @rota/server\" \"npm run dev -w @rota/web\"",
+    "build": "npm run build -w @rota/core && npm run build -w @rota/web && npm run build -w @rota/server",
+    "test": "npm run test -w @rota/core",
+    "start": "npm run start -w @rota/server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  }
+}
+

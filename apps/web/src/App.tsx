@@ -1,0 +1,335 @@
+import { useDeferredValue, useState, useTransition } from "react";
+import {
+  DEFAULT_SETTINGS,
+  normalizeActivityLabel,
+  normalizeName,
+  summarizeRotation,
+  toClipboardTable,
+  type ActivityCatalogEntry,
+  type ParsedSchedule,
+  type RotationCell,
+  type RotationResult,
+  type RotationSettings
+} from "@rota/core";
+import { InspectorDrawer } from "./components/InspectorDrawer";
+import { RotationTable } from "./components/RotationTable";
+import { SettingsPanel } from "./components/SettingsPanel";
+import { SummaryPanel } from "./components/SummaryPanel";
+import { UploadCard } from "./components/UploadCard";
+import { StatusBadge } from "./components/StatusBadge";
+import { generateRotationRequest, downloadExport, parseFile } from "./lib/api";
+import { saveBlob } from "./lib/download";
+
+function cellKey(cell: RotationCell): string {
+  return `${cell.date}-${cell.slotStart}`;
+}
+
+function resolveAgentKey(agentId: string | null, agentName: string): string {
+  return agentId ?? normalizeName(agentName);
+}
+
+export default function App() {
+  const [parsedSchedule, setParsedSchedule] = useState<ParsedSchedule | null>(null);
+  const [activityCatalog, setActivityCatalog] = useState<ActivityCatalogEntry[]>([]);
+  const [settings, setSettings] = useState<RotationSettings>(DEFAULT_SETTINGS);
+  const [rotation, setRotation] = useState<RotationResult | null>(null);
+  const [selectedCellKey, setSelectedCellKey] = useState<string | null>(null);
+  const [parseLoading, setParseLoading] = useState(false);
+  const [generationLoading, setGenerationLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState<"csv" | "xlsx" | "copy" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const deferredRotation = useDeferredValue(rotation);
+  const selectedCell =
+    deferredRotation?.cells.find((cell) => cellKey(cell) === selectedCellKey) ?? null;
+
+  async function handleFileSelected(file: File) {
+    setParseLoading(true);
+    setError(null);
+
+    try {
+      const response = await parseFile(file);
+      startTransition(() => {
+        setParsedSchedule(response.parsedSchedule);
+        setActivityCatalog(response.detectedActivities);
+        setSettings(response.settings);
+        setRotation(null);
+        setSelectedCellKey(null);
+      });
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Erreur d'import.");
+    } finally {
+      setParseLoading(false);
+    }
+  }
+
+  function updateSettings(patch: Partial<RotationSettings>) {
+    setSettings((current) => {
+      const next = { ...current, ...patch };
+      const alternanceKey = normalizeActivityLabel("Alternance Ecole/WH");
+
+      if (Object.prototype.hasOwnProperty.call(patch, "allowAlternance")) {
+        next.eligibleActivities = next.eligibleActivities.filter((activity) => activity !== alternanceKey);
+        next.ineligibleActivities = next.ineligibleActivities.filter((activity) => activity !== alternanceKey);
+
+        if (patch.allowAlternance) {
+          next.eligibleActivities = [...next.eligibleActivities, alternanceKey];
+        } else {
+          next.ineligibleActivities = [...next.ineligibleActivities, alternanceKey];
+        }
+      }
+
+      return next;
+    });
+  }
+
+  function updateActivityMode(normalizedActivity: string, category: "eligible" | "ineligible" | "unknown") {
+    setSettings((current) => {
+      const eligible = current.eligibleActivities.filter((activity) => activity !== normalizedActivity);
+      const ineligible = current.ineligibleActivities.filter((activity) => activity !== normalizedActivity);
+
+      if (category === "eligible") {
+        eligible.push(normalizedActivity);
+      }
+
+      if (category === "ineligible") {
+        ineligible.push(normalizedActivity);
+      }
+
+      const alternanceKey = normalizeActivityLabel("Alternance Ecole/WH");
+
+      return {
+        ...current,
+        allowAlternance: normalizedActivity === alternanceKey ? category === "eligible" : current.allowAlternance,
+        eligibleActivities: eligible,
+        ineligibleActivities: ineligible
+      };
+    });
+  }
+
+  async function handleGenerate() {
+    if (!parsedSchedule) {
+      return;
+    }
+
+    setGenerationLoading(true);
+    setError(null);
+
+    try {
+      const nextRotation = await generateRotationRequest(parsedSchedule, settings);
+      startTransition(() => {
+        setRotation(nextRotation);
+        setSelectedCellKey(nextRotation.cells[0] ? cellKey(nextRotation.cells[0]) : null);
+      });
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Erreur de generation.");
+    } finally {
+      setGenerationLoading(false);
+    }
+  }
+
+  async function handleExport(kind: "csv" | "xlsx") {
+    if (!rotation) {
+      return;
+    }
+
+    setExportLoading(kind);
+    setError(null);
+    try {
+      const blob = await downloadExport(rotation, kind);
+      saveBlob(blob, `rotation-chat.${kind}`);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Erreur d'export.");
+    } finally {
+      setExportLoading(null);
+    }
+  }
+
+  async function handleCopy() {
+    if (!rotation) {
+      return;
+    }
+
+    setExportLoading("copy");
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(toClipboardTable(rotation));
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Impossible de copier le tableau.");
+    } finally {
+      setExportLoading(null);
+    }
+  }
+
+  function handleManualAssign(cell: RotationCell, agentKey: string | null) {
+    if (!rotation || !parsedSchedule) {
+      return;
+    }
+
+    startTransition(() => {
+      const nextCells = rotation.cells.map((currentCell) => {
+        if (cellKey(currentCell) !== cellKey(cell)) {
+          return currentCell;
+        }
+
+        if (!agentKey) {
+          return {
+            ...currentCell,
+            assignedAgentId: null,
+            assignedAgentName: "Non couvert",
+            status: "manual" as const,
+            reasons: ["Affectation manuelle: creneau laisse non couvert."],
+            manualOverride: currentCell.manualOverride
+              ? { ...currentCell.manualOverride, forced: false }
+              : {
+                  forced: false,
+                  originalAgentId: currentCell.assignedAgentId,
+                  originalAgentName: currentCell.assignedAgentName
+                }
+          };
+        }
+
+        const agent = parsedSchedule.agents.find(
+          (item) => resolveAgentKey(item.agentId, item.displayName) === agentKey
+        );
+        const candidate = currentCell.candidates.find(
+          (item) => resolveAgentKey(item.agentId, item.agentName) === agentKey
+        );
+        const forced = candidate ? !candidate.eligible : true;
+
+        return {
+          ...currentCell,
+          assignedAgentId: agent?.agentId ?? candidate?.agentId ?? null,
+          assignedAgentName: agent?.displayName ?? candidate?.agentName ?? "Non couvert",
+          status: "manual" as const,
+          reasons: [
+            forced
+              ? "Affectation manuelle forcee sur un agent non eligible selon les regles actuelles."
+              : "Affectation manuelle realisee sur un agent eligible."
+          ],
+          manualOverride: currentCell.manualOverride
+            ? { ...currentCell.manualOverride, forced }
+            : {
+                forced,
+                originalAgentId: currentCell.assignedAgentId,
+                originalAgentName: currentCell.assignedAgentName
+              }
+        };
+      });
+
+      setRotation({
+        ...rotation,
+        cells: nextCells,
+        summary: summarizeRotation(nextCells, parsedSchedule.agents)
+      });
+    });
+  }
+
+  return (
+    <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
+      <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.34em] text-slate/70">Atelier11.app - Rotation Chat</p>
+          <h1 className="mt-3 max-w-4xl text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
+            Generez un planning de chat fiable a partir d'un export NICE WFM.
+          </h1>
+          <p className="mt-4 max-w-3xl text-base text-slate">
+            Le moteur reconstruit la disponibilite reelle, applique des regles metier configurables et produit une
+            rotation equitable, exportable et retouchable.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <StatusBadge tone="neutral">Deployable Docker ARM64</StatusBadge>
+          <StatusBadge tone="neutral">API /api/health</StatusBadge>
+          <StatusBadge tone={isPending ? "warning" : "success"}>{isPending ? "Mise a jour..." : "Pret"}</StatusBadge>
+        </div>
+      </header>
+
+      {error ? (
+        <div className="mb-6 rounded-3xl border border-coral/25 bg-coral/10 px-5 py-4 text-sm text-coral">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="grid gap-6">
+        <UploadCard parsedSchedule={parsedSchedule} loading={parseLoading} onFileSelected={handleFileSelected} />
+        <SettingsPanel
+          settings={settings}
+          activities={activityCatalog}
+          disabled={!parsedSchedule}
+          loading={generationLoading}
+          onGenerate={handleGenerate}
+          onSettingsChange={updateSettings}
+          onActivityChange={updateActivityMode}
+        />
+
+        {parsedSchedule?.warnings.length ? (
+          <section className="panel-surface rounded-4xl border border-white/70 p-6 shadow-panel">
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate/70">Qualite d'import</p>
+            <div className="mt-4 grid gap-3">
+              {parsedSchedule.warnings.map((warning) => (
+                <div key={`${warning.scope}-${warning.message}`} className="rounded-3xl bg-amber/10 px-4 py-3 text-sm text-slate">
+                  {warning.message}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {deferredRotation ? (
+          <div className="grid gap-6 xl:grid-cols-[1.5fr_0.9fr]">
+            <div className="grid gap-6">
+              <section className="panel-surface rounded-4xl border border-white/70 p-6 shadow-panel">
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white"
+                    onClick={() => void handleExport("xlsx")}
+                    disabled={exportLoading !== null}
+                  >
+                    {exportLoading === "xlsx" ? "Export Excel..." : "Exporter en .xlsx"}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate/15 bg-white px-5 py-3 text-sm font-semibold text-slate"
+                    onClick={() => void handleExport("csv")}
+                    disabled={exportLoading !== null}
+                  >
+                    {exportLoading === "csv" ? "Export CSV..." : "Exporter en .csv"}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate/15 bg-white px-5 py-3 text-sm font-semibold text-slate"
+                    onClick={() => void handleCopy()}
+                    disabled={exportLoading !== null}
+                  >
+                    {exportLoading === "copy" ? "Copie..." : "Copier le tableau"}
+                  </button>
+                </div>
+              </section>
+              <RotationTable
+                rotation={deferredRotation}
+                selectedCellKey={selectedCellKey}
+                onSelectCell={(cell) => setSelectedCellKey(cellKey(cell))}
+              />
+              <SummaryPanel rotation={deferredRotation} />
+            </div>
+            <InspectorDrawer
+              cell={selectedCell}
+              agents={parsedSchedule?.agents ?? []}
+              onClose={() => setSelectedCellKey(null)}
+              onManualAssign={handleManualAssign}
+            />
+          </div>
+        ) : (
+          <section className="panel-surface rounded-4xl border border-white/70 p-10 text-center shadow-panel">
+            <p className="text-lg font-semibold text-ink">La rotation apparaitra ici apres analyse et generation.</p>
+            <p className="mt-2 text-sm text-slate">
+              Vous pourrez ensuite exporter le tableau, inspecter chaque decision et ajuster les cellules manuellement.
+            </p>
+          </section>
+        )}
+      </div>
+    </main>
+  );
+}

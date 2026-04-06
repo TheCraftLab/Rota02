@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  font-family: "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(225, 160, 74, 0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(111, 165, 139, 0.14), transparent 34%),
+    linear-gradient(180deg, #f7f4ee 0%, #edf2f6 100%);
+  color: #11212d;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: transparent;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.panel-surface {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+}
+
+.grid-table {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(62, 92, 118, 0.4) transparent;
+}
+
+.grid-table::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.grid-table::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(62, 92, 118, 0.35);
+}
+
