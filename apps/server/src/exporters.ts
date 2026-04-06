@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import type { RotationResult } from "@rota/core";
-import { formatDisplayDate } from "@rota/core";
+import { formatDisplayDate, formatWeekday } from "@rota/core";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
 function getCellExportLabel(value: RotationResult["cells"][number] | null | undefined): string {
@@ -140,175 +140,404 @@ export async function buildRotationPdf(rotation: RotationResult): Promise<Buffer
   const pdf = await PDFDocument.create();
   const regularFont = await pdf.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
-
   const pageWidth = 841.89;
   const pageHeight = 595.28;
-  const margin = 28;
-  const headerHeight = 78;
-  const footerHeight = 20;
-  const rowHeight = 24;
-  const availableHeight = pageHeight - margin - headerHeight - footerHeight - 24;
-  const rowsPerPage = Math.max(1, Math.floor(availableHeight / rowHeight));
+  const pageSlices = paginatePdf(rotation, pageWidth, pageHeight);
 
-  const dateChunks = chunkDates(rotation.dates, 4);
-
-  for (const [chunkIndex, dates] of dateChunks.entries()) {
-    const columns = buildColumns(dates);
-    const slotPages = chunkSlots(rotation.slots, rowsPerPage);
-
-    for (const [slotPageIndex, slotChunk] of slotPages.entries()) {
-      const page = pdf.addPage([pageWidth, pageHeight]);
-      drawPdfHeader(page, rotation, chunkIndex, dateChunks.length, slotPageIndex, slotPages.length, boldFont, regularFont);
-      drawPdfTable(page, rotation, slotChunk, columns, margin, pageHeight - margin - headerHeight, rowHeight, regularFont, boldFont);
-      drawPdfFooter(page, margin, footerHeight, regularFont, pdf.getPageCount());
-    }
+  for (const [index, slice] of pageSlices.entries()) {
+    const page = pdf.addPage([pageWidth, pageHeight]);
+    drawModernPdfPage(page, rotation, slice, index + 1, pageSlices.length, boldFont, regularFont);
   }
-
-  const summaryPage = pdf.addPage([841.89, 595.28]);
-  drawSummaryPage(summaryPage, rotation, boldFont, regularFont);
 
   const bytes = await pdf.save();
   return Buffer.from(bytes);
 }
 
-function chunkDates(dates: string[], chunkSize: number): string[][] {
-  const chunks: string[][] = [];
-  for (let index = 0; index < dates.length; index += chunkSize) {
-    chunks.push(dates.slice(index, index + chunkSize));
-  }
-  return chunks.length ? chunks : [[]];
+interface PdfSlice {
+  dates: string[];
+  slots: string[];
 }
 
-function chunkSlots(slots: string[], chunkSize: number): string[][] {
-  const chunks: string[][] = [];
-  for (let index = 0; index < slots.length; index += chunkSize) {
-    chunks.push(slots.slice(index, index + chunkSize));
+interface PdfLayout {
+  scale: number;
+  tableX: number;
+  tableTopY: number;
+  timeWidth: number;
+  columnWidth: number;
+  headerHeight: number;
+  rowHeight: number;
+  tableWidth: number;
+}
+
+const PDF_THEME = {
+  ink: rgb(0.09, 0.14, 0.2),
+  muted: rgb(0.36, 0.44, 0.52),
+  line: rgb(0.84, 0.88, 0.92),
+  surface: rgb(0.98, 0.985, 0.99),
+  navy: rgb(0.12, 0.19, 0.29),
+  navySoft: rgb(0.2, 0.31, 0.44),
+  sand: rgb(0.95, 0.92, 0.86),
+  mint: rgb(0.9, 0.97, 0.93),
+  amber: rgb(0.98, 0.94, 0.84),
+  coral: rgb(0.98, 0.91, 0.9),
+  slate: rgb(0.92, 0.94, 0.97),
+  white: rgb(1, 1, 1)
+};
+
+function paginatePdf(rotation: RotationResult, pageWidth: number, pageHeight: number): PdfSlice[] {
+  const margin = 28;
+  const headerHeight = 86;
+  const metricsHeight = 62;
+  const legendHeight = 22;
+  const footerHeight = 18;
+  const availableWidth = pageWidth - margin * 2;
+  const availableHeight = pageHeight - margin * 2 - headerHeight - metricsHeight - legendHeight - footerHeight - 22;
+
+  const minimumScale = 0.6;
+  const naturalTimeWidth = 92;
+  const naturalColumnWidth = 118;
+  const naturalHeaderHeight = 44;
+  const naturalRowHeight = 30;
+
+  const fullScale = Math.min(
+    1,
+    availableWidth / (naturalTimeWidth + rotation.dates.length * naturalColumnWidth),
+    availableHeight / (naturalHeaderHeight + rotation.slots.length * naturalRowHeight)
+  );
+
+  if (fullScale >= minimumScale) {
+    return [{ dates: rotation.dates, slots: rotation.slots }];
+  }
+
+  const maxDatesPerPage = Math.max(
+    1,
+    Math.floor((availableWidth / minimumScale - naturalTimeWidth) / naturalColumnWidth)
+  );
+  const maxSlotsPerPage = Math.max(
+    1,
+    Math.floor((availableHeight / minimumScale - naturalHeaderHeight) / naturalRowHeight)
+  );
+
+  const dateChunks = chunkList(rotation.dates, maxDatesPerPage);
+  const slotChunks = chunkList(rotation.slots, maxSlotsPerPage);
+  const slices: PdfSlice[] = [];
+
+  for (const dates of dateChunks) {
+    for (const slots of slotChunks) {
+      slices.push({ dates, slots });
+    }
+  }
+
+  return slices.length ? slices : [{ dates: rotation.dates, slots: rotation.slots }];
+}
+
+function chunkList<T>(items: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
   }
   return chunks;
 }
 
-function buildColumns(dates: string[]): ColumnLayout[] {
-  return [
-    {
-      key: "time",
-      label: "Heure",
-      width: 72
-    },
-    ...dates.map((date) => ({
-      key: date,
-      label: formatDisplayDate(date),
-      width: 172
-    }))
-  ];
+function computePdfLayout(pageWidth: number, pageHeight: number, slice: PdfSlice): PdfLayout {
+  const margin = 28;
+  const headerHeight = 86;
+  const metricsHeight = 62;
+  const legendHeight = 22;
+  const footerHeight = 18;
+  const gap = 10;
+  const availableWidth = pageWidth - margin * 2;
+  const availableHeight = pageHeight - margin * 2 - headerHeight - metricsHeight - legendHeight - footerHeight - 22;
+  const naturalTimeWidth = 92;
+  const naturalColumnWidth = 118;
+  const naturalHeaderHeight = 44;
+  const naturalRowHeight = 30;
+  const scale = Math.min(
+    1,
+    availableWidth / (naturalTimeWidth + slice.dates.length * naturalColumnWidth),
+    availableHeight / (naturalHeaderHeight + slice.slots.length * naturalRowHeight)
+  );
+  const timeWidth = naturalTimeWidth * scale;
+  const columnWidth = naturalColumnWidth * scale;
+  const headerRowHeight = naturalHeaderHeight * scale;
+  const rowHeight = naturalRowHeight * scale;
+  const tableWidth = timeWidth + slice.dates.length * columnWidth;
+  const tableHeight = headerRowHeight + slice.slots.length * rowHeight;
+  const tableX = margin + (availableWidth - tableWidth) / 2;
+  const tableTopY = pageHeight - margin - headerHeight - metricsHeight - legendHeight - gap - (availableHeight - tableHeight) / 2;
+
+  return {
+    scale,
+    tableX,
+    tableTopY,
+    timeWidth,
+    columnWidth,
+    headerHeight: headerRowHeight,
+    rowHeight,
+    tableWidth
+  };
 }
 
-function drawPdfHeader(
+function drawModernPdfPage(
   page: PDFPage,
   rotation: RotationResult,
-  chunkIndex: number,
-  totalChunks: number,
-  pageIndex: number,
+  slice: PdfSlice,
+  pageNumber: number,
   totalPages: number,
   boldFont: PDFFont,
   regularFont: PDFFont
 ): void {
   const { width, height } = page.getSize();
+  const margin = 28;
+  const layout = computePdfLayout(width, height, slice);
+  const manualCount = rotation.cells.filter((cell) => cell.status === "manual").length;
+  const coveredCount = Math.max(rotation.summary.totalSlots - rotation.summary.uncoveredSlots, 0);
+  const holidayCount = rotation.cells.filter((cell) => cell.status === "holiday").length;
+  const dateRange =
+    rotation.dates.length > 1
+      ? `${formatDisplayDate(rotation.dates[0] ?? "")} - ${formatDisplayDate(rotation.dates[rotation.dates.length - 1] ?? "")}`
+      : formatDisplayDate(rotation.dates[0] ?? "");
+
   page.drawRectangle({
-    x: 28,
-    y: height - 70,
-    width: width - 56,
-    height: 46,
-    color: rgb(0.95, 0.93, 0.89)
+    x: 0,
+    y: 0,
+    width,
+    height,
+    color: PDF_THEME.surface
   });
 
-  page.drawText("Rotation Chat", {
-    x: 40,
-    y: height - 48,
-    size: 18,
+  page.drawRectangle({
+    x: margin,
+    y: height - margin - 84,
+    width: width - margin * 2,
+    height: 84,
+    color: PDF_THEME.navy
+  });
+
+  page.drawRectangle({
+    x: width - 230,
+    y: height - margin - 84,
+    width: 202,
+    height: 84,
+    color: PDF_THEME.navySoft
+  });
+
+  page.drawText("Planning Chat", {
+    x: margin + 18,
+    y: height - margin - 30,
+    size: 24,
     font: boldFont,
-    color: rgb(0.07, 0.13, 0.18)
+    color: PDF_THEME.white
   });
 
-  page.drawText(
-    `Plage ${rotation.settings.startTime}-${rotation.settings.endTime} · Pas ${rotation.settings.slotMinutes} min`,
-    {
-      x: 40,
-      y: height - 64,
-      size: 9,
-      font: regularFont,
-      color: rgb(0.24, 0.36, 0.46)
-    }
-  );
+  page.drawText(`Periode ${dateRange}`, {
+    x: margin + 18,
+    y: height - margin - 48,
+    size: 10,
+    font: regularFont,
+    color: rgb(0.88, 0.92, 0.96)
+  });
 
-  page.drawText(
-    `Colonnes ${chunkIndex + 1}/${totalChunks} · Lignes ${pageIndex + 1}/${totalPages}`,
-    {
-      x: width - 210,
-      y: height - 54,
-      size: 9,
-      font: regularFont,
-      color: rgb(0.24, 0.36, 0.46)
-    }
-  );
+  page.drawText(`Generation ${rotation.settings.startTime}-${rotation.settings.endTime}`, {
+    x: margin + 18,
+    y: height - margin - 62,
+    size: 10,
+    font: regularFont,
+    color: rgb(0.88, 0.92, 0.96)
+  });
+
+  page.drawText(totalPages === 1 ? "Version compacte" : `Page ${pageNumber} / ${totalPages}`, {
+    x: width - 214,
+    y: height - margin - 30,
+    size: 12,
+    font: boldFont,
+    color: PDF_THEME.white
+  });
+
+  page.drawText(`${slice.dates.length} jour(s) · ${slice.slots.length} creneau(x)`, {
+    x: width - 214,
+    y: height - margin - 48,
+    size: 10,
+    font: regularFont,
+    color: rgb(0.88, 0.92, 0.96)
+  });
+
+  drawMetricCard(page, margin, height - margin - 154, 176, 52, "Equite", `${rotation.summary.fairnessScore}%`, PDF_THEME.mint, boldFont, regularFont);
+  drawMetricCard(page, margin + 188, height - margin - 154, 176, 52, "Couverts", `${coveredCount}`, PDF_THEME.sand, boldFont, regularFont);
+  drawMetricCard(page, margin + 376, height - margin - 154, 176, 52, "Manuels", `${manualCount}`, PDF_THEME.amber, boldFont, regularFont);
+  drawMetricCard(page, margin + 564, height - margin - 154, 176, 52, "Feries", `${holidayCount}`, PDF_THEME.slate, boldFont, regularFont);
+
+  drawLegendPill(page, margin, height - margin - 176, "Affecte", PDF_THEME.mint, boldFont, regularFont);
+  drawLegendPill(page, margin + 92, height - margin - 176, "Manuel", PDF_THEME.amber, boldFont, regularFont);
+  drawLegendPill(page, margin + 184, height - margin - 176, "Non couvert", PDF_THEME.coral, boldFont, regularFont);
+  drawLegendPill(page, margin + 298, height - margin - 176, "Ferie", PDF_THEME.sand, boldFont, regularFont);
+  drawLegendPill(page, margin + 374, height - margin - 176, "Libere", PDF_THEME.slate, boldFont, regularFont);
+
+  drawModernPdfTable(page, rotation, slice, layout, boldFont, regularFont);
+  drawPdfFooter(page, margin, 14, regularFont, pageNumber);
 }
 
-function drawPdfTable(
+function drawMetricCard(
   page: PDFPage,
-  rotation: RotationResult,
-  slotChunk: string[],
-  columns: ColumnLayout[],
-  startX: number,
-  topY: number,
-  rowHeight: number,
-  regularFont: PDFFont,
-  boldFont: PDFFont
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  label: string,
+  value: string,
+  color: ReturnType<typeof rgb>,
+  boldFont: PDFFont,
+  regularFont: PDFFont
 ): void {
-  let x = startX;
-  const tableWidth = columns.reduce((sum, column) => sum + column.width, 0);
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height,
+    color,
+    borderColor: PDF_THEME.line,
+    borderWidth: 1
+  });
+
+  page.drawText(label, {
+    x: x + 12,
+    y: y + height - 16,
+    size: 9,
+    font: regularFont,
+    color: PDF_THEME.muted
+  });
+
+  page.drawText(value, {
+    x: x + 12,
+    y: y + 14,
+    size: 18,
+    font: boldFont,
+    color: PDF_THEME.ink
+  });
+}
+
+function drawLegendPill(
+  page: PDFPage,
+  x: number,
+  y: number,
+  label: string,
+  fill: ReturnType<typeof rgb>,
+  boldFont: PDFFont,
+  regularFont: PDFFont
+): void {
+  const width = 68 + label.length * 2.2;
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height: 18,
+    color: PDF_THEME.white,
+    borderColor: PDF_THEME.line,
+    borderWidth: 1
+  });
 
   page.drawRectangle({
-    x: startX,
-    y: topY - rowHeight,
-    width: tableWidth,
-    height: rowHeight,
-    color: rgb(0.91, 0.95, 0.97),
-    borderColor: rgb(0.8, 0.86, 0.9),
+    x: x + 6,
+    y: y + 4,
+    width: 10,
+    height: 10,
+    color: fill
+  });
+
+  page.drawText(label, {
+    x: x + 22,
+    y: y + 5,
+    size: 8,
+    font: boldFont ?? regularFont,
+    color: PDF_THEME.muted
+  });
+}
+
+function drawModernPdfTable(
+  page: PDFPage,
+  rotation: RotationResult,
+  slice: PdfSlice,
+  layout: PdfLayout,
+  boldFont: PDFFont,
+  regularFont: PDFFont
+): void {
+  const columns: ColumnLayout[] = [
+    {
+      key: "time",
+      label: "Heure",
+      width: layout.timeWidth
+    },
+    ...slice.dates.map((date) => ({
+      key: date,
+      label: formatDisplayDate(date),
+      width: layout.columnWidth
+    }))
+  ];
+  const tableHeight = layout.headerHeight + slice.slots.length * layout.rowHeight;
+
+  page.drawRectangle({
+    x: layout.tableX - 2,
+    y: layout.tableTopY - tableHeight - 2,
+    width: layout.tableWidth + 4,
+    height: tableHeight + 4,
+    color: PDF_THEME.white,
+    borderColor: PDF_THEME.line,
     borderWidth: 1
   });
 
   for (const column of columns) {
     page.drawRectangle({
-      x,
-      y: topY - rowHeight,
+      x: layout.tableX + columns.slice(0, columns.indexOf(column)).reduce((sum, item) => sum + item.width, 0),
+      y: layout.tableTopY - layout.headerHeight,
       width: column.width,
-      height: rowHeight,
-      borderColor: rgb(0.8, 0.86, 0.9),
+      height: layout.headerHeight,
+      color: column.key === "time" ? PDF_THEME.navySoft : PDF_THEME.navy,
+      borderColor: PDF_THEME.navy,
       borderWidth: 1
     });
-
-    page.drawText(column.label, {
-      x: x + 8,
-      y: topY - 16,
-      size: 9,
-      font: boldFont,
-      color: rgb(0.07, 0.13, 0.18)
-    });
-
-    x += column.width;
   }
 
-  let rowY = topY - rowHeight;
+  let headerX = layout.tableX;
+  for (const column of columns) {
+    if (column.key === "time") {
+      page.drawText("Heure", {
+        x: headerX + 10,
+        y: layout.tableTopY - layout.headerHeight / 2 - 2,
+        size: 9 * layout.scale,
+        font: boldFont,
+        color: PDF_THEME.white
+      });
+    } else {
+      page.drawText(formatWeekday(column.key), {
+        x: headerX + 10,
+        y: layout.tableTopY - 16 * layout.scale,
+        size: 7.5 * layout.scale,
+        font: regularFont,
+        color: rgb(0.86, 0.91, 0.96)
+      });
+      page.drawText(formatDisplayDate(column.key), {
+        x: headerX + 10,
+        y: layout.tableTopY - layout.headerHeight + 12 * layout.scale,
+        size: 10 * layout.scale,
+        font: boldFont,
+        color: PDF_THEME.white
+      });
+    }
+    headerX += column.width;
+  }
 
-  for (const slot of slotChunk) {
-    rowY -= rowHeight;
-    let rowX = startX;
+  let rowY = layout.tableTopY - layout.headerHeight;
+
+  for (const slot of slice.slots) {
+    rowY -= layout.rowHeight;
+    let rowX = layout.tableX;
 
     for (const column of columns) {
       const isTimeColumn = column.key === "time";
       const cell = isTimeColumn
         ? null
         : rotation.cells.find((item) => item.date === column.key && item.slotStart === slot);
-      const value = isTimeColumn ? slot : getCellExportLabel(cell);
+      const value = isTimeColumn ? getSlotLabel(rotation, slot) : getCellExportLabel(cell);
       const isDisabled = !isTimeColumn && cell?.status === "disabled";
       const isHoliday = !isTimeColumn && cell?.status === "holiday";
       const isUncovered = !isTimeColumn && cell?.status === "uncovered";
@@ -318,26 +547,58 @@ function drawPdfTable(
         x: rowX,
         y: rowY,
         width: column.width,
-        height: rowHeight,
+        height: layout.rowHeight,
         color: isTimeColumn
-          ? rgb(1, 1, 1)
+          ? PDF_THEME.white
           : isDisabled
-            ? rgb(0.92, 0.94, 0.97)
-          : isHoliday
-            ? rgb(0.96, 0.92, 0.82)
-          : isUncovered
-            ? rgb(0.99, 0.93, 0.93)
-            : isManual
-              ? rgb(0.98, 0.95, 0.88)
-              : rgb(0.94, 0.98, 0.96),
-        borderColor: rgb(0.86, 0.9, 0.93),
-        borderWidth: 1
+            ? PDF_THEME.slate
+            : isHoliday
+              ? PDF_THEME.sand
+              : isUncovered
+                ? PDF_THEME.coral
+                : isManual
+                  ? PDF_THEME.amber
+                  : PDF_THEME.mint,
+        borderColor: PDF_THEME.line,
+        borderWidth: 0.8
       });
 
-      drawTextInCell(page, value, rowX + 7, rowY + 7, column.width - 14, regularFont, isTimeColumn ? 9 : 8.5);
+      page.drawRectangle({
+        x: rowX,
+        y: rowY,
+        width: column.width,
+        height: layout.rowHeight,
+        color: isTimeColumn
+          ? PDF_THEME.white
+          : isDisabled
+            ? PDF_THEME.slate
+            : isHoliday
+              ? PDF_THEME.sand
+              : isUncovered
+                ? PDF_THEME.coral
+                : isManual
+                  ? PDF_THEME.amber
+                  : PDF_THEME.mint,
+        opacity: isTimeColumn ? 0 : 0.38
+      });
+
+      drawTextInCell(
+        page,
+        value,
+        rowX + 8 * layout.scale,
+        rowY + 6 * layout.scale,
+        column.width - 16 * layout.scale,
+        isTimeColumn ? boldFont : regularFont,
+        isTimeColumn ? 8.3 * layout.scale : 8 * layout.scale
+      );
       rowX += column.width;
     }
   }
+}
+
+function getSlotLabel(rotation: RotationResult, slotStart: string): string {
+  const cell = rotation.cells.find((item) => item.slotStart === slotStart);
+  return cell ? `${cell.slotStart} - ${cell.slotEnd}` : slotStart;
 }
 
 function drawPdfFooter(page: PDFPage, margin: number, footerHeight: number, font: PDFFont, pageNumber: number): void {
@@ -346,85 +607,16 @@ function drawPdfFooter(page: PDFPage, margin: number, footerHeight: number, font
     y: footerHeight,
     size: 8,
     font,
-    color: rgb(0.35, 0.46, 0.55)
+    color: PDF_THEME.muted
   });
-}
 
-function drawSummaryPage(page: PDFPage, rotation: RotationResult, boldFont: PDFFont, regularFont: PDFFont): void {
-  const { width, height } = page.getSize();
-  const margin = 40;
-  let y = height - margin;
-
-  page.drawText("Controle de la rotation", {
-    x: margin,
-    y,
-    size: 20,
-    font: boldFont,
-    color: rgb(0.07, 0.13, 0.18)
+  page.drawText("Atelier11.app", {
+    x: page.getWidth() - margin - 58,
+    y: footerHeight,
+    size: 8,
+    font,
+    color: PDF_THEME.muted
   });
-  y -= 24;
-
-  page.drawText(
-    `Equite globale: ${rotation.summary.fairnessScore}% · Creneaux non couverts: ${rotation.summary.uncoveredSlots}`,
-    {
-      x: margin,
-      y,
-      size: 10,
-      font: regularFont,
-      color: rgb(0.24, 0.36, 0.46)
-    }
-  );
-  y -= 28;
-
-  page.drawText("Repartition par agent", {
-    x: margin,
-    y,
-    size: 13,
-    font: boldFont,
-    color: rgb(0.07, 0.13, 0.18)
-  });
-  y -= 18;
-
-  for (const item of rotation.summary.agentSummaries) {
-    const detail = Object.entries(item.slotsByDate)
-      .map(([date, count]) => `${formatDisplayDate(date)}: ${count}`)
-      .join(" | ");
-
-    page.drawText(`${item.agentName} - ${item.totalSlots} creneau(x)${item.overload ? " - surveillance" : ""}`, {
-      x: margin,
-      y,
-      size: 10,
-      font: boldFont,
-      color: rgb(0.07, 0.13, 0.18)
-    });
-    y -= 13;
-
-    drawWrappedText(page, detail || "Aucun creneau", margin, y, width - margin * 2, regularFont, 9, 12, rgb(0.24, 0.36, 0.46));
-    y -= 24;
-
-    if (y < 80) {
-      break;
-    }
-  }
-
-  if (rotation.summary.alerts.length) {
-    page.drawText("Alertes", {
-      x: margin,
-      y,
-      size: 13,
-      font: boldFont,
-      color: rgb(0.07, 0.13, 0.18)
-    });
-    y -= 18;
-
-    for (const alert of rotation.summary.alerts) {
-      drawWrappedText(page, `- ${alert}`, margin, y, width - margin * 2, regularFont, 9, 12, rgb(0.62, 0.28, 0.2));
-      y -= 16;
-      if (y < 50) {
-        break;
-      }
-    }
-  }
 }
 
 function drawTextInCell(
@@ -437,7 +629,8 @@ function drawTextInCell(
   size: number
 ): void {
   const lines = splitTextToLines(text, font, size, maxWidth, 2);
-  let lineY = y + (lines.length === 1 ? 4 : 8);
+  const lineHeight = Math.max(size + 1, 8);
+  let lineY = y + (lines.length === 1 ? lineHeight * 0.6 : lineHeight * 1.2);
 
   for (const line of lines) {
     page.drawText(line, {
@@ -445,9 +638,9 @@ function drawTextInCell(
       y: lineY,
       size,
       font,
-      color: rgb(0.07, 0.13, 0.18)
+      color: PDF_THEME.ink
     });
-    lineY -= 9;
+    lineY -= lineHeight;
   }
 }
 
