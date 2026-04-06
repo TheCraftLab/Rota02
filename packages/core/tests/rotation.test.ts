@@ -36,6 +36,33 @@ Agent: 3010957 Defougere, Lucie DateDebutFinActivite planifieeDebutFin
 09:00 18:00 Open Time
 `;
 
+const NICE_PDF_EXTRACT_INPUT = `
+Horaires d’agent
+Plage de dates: 06/04/26 - 11/04/26
+Agent: 3055492 Bedani, Anais
+DateDébutFinActivité planifiéeDébutFin
+07/04/2608:3017:36Open Time08:3010:30
+Petite pause remuneree exclue10:3010:45
+Open Time10:4512:30
+Pause repas12:3013:30
+Open Time13:3015:45
+Petite pause remuneree exclue15:4516:00
+Open Time16:0017:36
+08/04/2608:3017:30Open Time08:3010:30
+Nivois, Kevin 06/04/26 21:29Page 1 de 22
+
+Horaires d’agent06/04/26 - 11/04/26
+Agent: 3055492 Bedani, Anais
+DateDébutFinActivité planifiéeDébutFin
+Petite pause remuneree exclue10:3010:45
+Open Time10:4512:30
+Pause repas12:3013:30
+Open Time13:3015:00
+Petite pause remuneree exclue15:0015:15
+Open Time15:1517:30
+10/04/26Libre
+`;
+
 describe("parseNiceWfmText", () => {
   it("detects agents, dates and intervals from a NICE-style export", () => {
     const parsed = parseNiceWfmText(SAMPLE_INPUT, "sample.txt", "text/plain", new Date("2026-04-01T10:00:00Z"));
@@ -53,6 +80,30 @@ describe("parseNiceWfmText", () => {
     expect(parsed.agents).toHaveLength(1);
     expect(parsed.agents[0]?.agentId).toBe("3010957");
     expect(parsed.agents[0]?.displayName).toBe("Lucie DEFOUGERE");
+  });
+
+  it("parses NICE compact day lines and continues the same day after a page break", () => {
+    const parsed = parseNiceWfmText(
+      NICE_PDF_EXTRACT_INPUT,
+      "view-4.pdf",
+      "application/pdf",
+      new Date("2026-04-06T10:00:00Z")
+    );
+
+    expect(parsed.agents).toHaveLength(1);
+    expect(parsed.agents[0]?.displayName).toBe("Anais BEDANI");
+    expect(parsed.dates).toEqual(["2026-04-07", "2026-04-08", "2026-04-10"]);
+    expect(parsed.agents[0]?.days["2026-04-08"]?.intervals).toHaveLength(7);
+    expect(parsed.agents[0]?.days["2026-04-08"]?.intervals[0]).toMatchObject({
+      activity: "Open Time",
+      start: "08:30",
+      end: "10:30"
+    });
+    expect(parsed.agents[0]?.days["2026-04-10"]?.intervals[0]).toMatchObject({
+      activity: "Libre",
+      start: "00:00",
+      end: "23:59"
+    });
   });
 });
 

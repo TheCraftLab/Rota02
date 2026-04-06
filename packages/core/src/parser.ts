@@ -1,11 +1,17 @@
 import type { AgentSchedule, ParseWarning, ParsedDay, ParsedInterval, ParsedSchedule } from "./types";
 import { compareIsoDate, inferIsoDate, normalizeActivityLabel, normalizeName, normalizeText, normalizeWhitespace } from "./utils";
 
-const DATE_PATTERN = /(\d{2}\/\d{2}(?:\/\d{2,4})?)/;
+const DATE_PATTERN = /(\d{2}\/\d{2}(?:\/(?:\d{4}|\d{2}))?)/;
 const TIME_RANGE_PATTERN =
   /(?<start>\d{1,2}:\d{2})\s*(?:-|a|->|>|au|to)?\s*(?<end>\d{1,2}:\d{2})\s*(?<label>.*)$/i;
 const AGENT_HEADER_SUFFIX_PATTERN =
   /\s+(?:Date\s*Debut\s*Fin\s*Activite(?:\s*planifiee)?\s*Debut\s*Fin|DateDebutFinActivite(?:\s*planifiee)?DebutFin|Date\s*Activite|DateDebutFin)\b.*$/i;
+const NICE_DAY_START_PATTERN =
+  /^(?<date>\d{2}\/\d{2}(?:\/(?:\d{4}|\d{2}))?)\s*(?<plannedStart>\d{1,2}:\d{2})\s*(?<plannedEnd>\d{1,2}:\d{2})\s*(?<activity>.+?)\s*(?<slotStart>\d{1,2}:\d{2})\s*(?<slotEnd>\d{1,2}:\d{2})$/i;
+const NICE_CONTINUATION_PATTERN =
+  /^(?<activity>.+?)\s*(?<start>\d{1,2}:\d{2})\s*(?<end>\d{1,2}:\d{2})$/i;
+const NICE_DAY_STATUS_PATTERN =
+  /^(?<date>\d{2}\/\d{2}(?:\/(?:\d{4}|\d{2}))?)\s*(?<activity>Libre|Conge.*|Absence.*|Off)$/i;
 
 function splitLogicalLines(input: string): string[] {
   const baseLines = normalizeWhitespace(input)
@@ -33,6 +39,16 @@ function splitLogicalLines(input: string): string[] {
   }
 
   return logicalLines;
+}
+
+function isNoiseLine(line: string): boolean {
+  const normalized = normalizeText(line).replace(/[’']/g, "'").toLowerCase();
+  return (
+    /horaires d.?agent/.test(normalized) ||
+    normalized.startsWith("plage de dates:") ||
+    /date\s*debut\s*fin\s*activite\s*planifiee\s*debut\s*fin/.test(normalized) ||
+    /page\s+\d+\s+de\s+\d+/.test(normalized)
+  );
 }
 
 function ensureDay(agent: AgentSchedule, date: string): ParsedDay {
@@ -128,6 +144,7 @@ export function parseNiceWfmText(
   const warnings: ParseWarning[] = [];
   const dates = new Set<string>();
   const agentMap = new Map<string, AgentSchedule>();
+  const lastDateByAgent = new Map<string, string>();
   const defaultYear = now.getFullYear();
 
   let currentAgent: AgentSchedule | null = null;
@@ -143,7 +160,76 @@ export function parseNiceWfmText(
       if (!existing) {
         agentMap.set(nextAgent.normalizedName, nextAgent);
       }
-      currentDate = null;
+      currentDate = lastDateByAgent.get(currentAgent.normalizedName) ?? null;
+      continue;
+    }
+
+    if (isNoiseLine(line)) {
+      continue;
+    }
+
+    const dayStatus = line.match(NICE_DAY_STATUS_PATTERN);
+    if (dayStatus?.groups?.date && dayStatus.groups.activity) {
+      const dateInLine = inferIsoDate(dayStatus.groups.date, defaultYear);
+      if (!dateInLine) {
+        continue;
+      }
+
+      currentDate = dateInLine;
+      dates.add(dateInLine);
+
+      if (!currentAgent) {
+        warnings.push({
+          scope: "global",
+          message: `Journee ignoree faute de contexte agent: ${line}`
+        });
+        continue;
+      }
+
+      lastDateByAgent.set(currentAgent.normalizedName, currentDate);
+      const day = ensureDay(currentAgent, currentDate);
+      day.intervals.push({
+        start: "00:00",
+        end: "23:59",
+        activity: normalizeText(dayStatus.groups.activity),
+        normalizedActivity: normalizeActivityLabel(dayStatus.groups.activity),
+        sourceLine: line
+      });
+      continue;
+    }
+
+    const niceDayStart = line.match(NICE_DAY_START_PATTERN);
+    if (
+      niceDayStart?.groups?.date &&
+      niceDayStart.groups.activity &&
+      niceDayStart.groups.slotStart &&
+      niceDayStart.groups.slotEnd
+    ) {
+      const dateInLine = inferIsoDate(niceDayStart.groups.date, defaultYear);
+      if (!dateInLine) {
+        continue;
+      }
+
+      currentDate = dateInLine;
+      dates.add(dateInLine);
+
+      if (!currentAgent) {
+        warnings.push({
+          scope: "global",
+          message: `Journee NICE ignoree faute de contexte agent: ${line}`
+        });
+        continue;
+      }
+
+      lastDateByAgent.set(currentAgent.normalizedName, currentDate);
+      const day = ensureDay(currentAgent, currentDate);
+      day.intervals.push({
+        start: niceDayStart.groups.slotStart.padStart(5, "0"),
+        end: niceDayStart.groups.slotEnd.padStart(5, "0"),
+        activity: normalizeText(niceDayStart.groups.activity),
+        normalizedActivity: normalizeActivityLabel(niceDayStart.groups.activity),
+        sourceLine: line
+      });
       continue;
     }
 
@@ -162,6 +248,28 @@ export function parseNiceWfmText(
       continue;
     }
 
+    const continuation = line.match(NICE_CONTINUATION_PATTERN);
+    if (continuation?.groups?.activity && continuation.groups.start && continuation.groups.end) {
+      if (!currentAgent || !currentDate) {
+        warnings.push({
+          scope: "global",
+          message: `Sous-creneau ignore faute de contexte agent/date: ${line}`
+        });
+        continue;
+      }
+
+      const day = ensureDay(currentAgent, currentDate);
+      const activity = normalizeText(continuation.groups.activity);
+      day.intervals.push({
+        start: continuation.groups.start.padStart(5, "0"),
+        end: continuation.groups.end.padStart(5, "0"),
+        activity,
+        normalizedActivity: normalizeActivityLabel(activity),
+        sourceLine: line
+      });
+      continue;
+    }
+
     const timeRange = line.match(TIME_RANGE_PATTERN);
     if (timeRange?.groups?.start && timeRange.groups.end) {
       if (!currentAgent || !currentDate) {
@@ -172,6 +280,7 @@ export function parseNiceWfmText(
         continue;
       }
 
+      lastDateByAgent.set(currentAgent.normalizedName, currentDate);
       const day = ensureDay(currentAgent, currentDate);
       const label = extractActivityLabel(
         timeRange.groups.label ?? "",
@@ -192,6 +301,7 @@ export function parseNiceWfmText(
     }
 
     if (currentAgent && currentDate && /^(Libre|Conge|Absence|Off)\b/i.test(line)) {
+      lastDateByAgent.set(currentAgent.normalizedName, currentDate);
       const day = ensureDay(currentAgent, currentDate);
       day.intervals.push({
         start: "00:00",

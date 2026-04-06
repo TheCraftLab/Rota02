@@ -48,7 +48,7 @@ export function formatDisplayDate(isoDate: string): string {
 }
 
 export function inferIsoDate(raw: string, defaultYear: number): string | null {
-  const match = raw.match(/(\d{2})\/(\d{2})(?:\/(\d{2,4}))?/);
+  const match = raw.match(/(\d{2})\/(\d{2})(?:\/(\d{4}|\d{2}))?/);
   if (!match) {
     return null;
   }
@@ -123,4 +123,3 @@ export function standardDeviation(values: number[]): number {
   const variance = average(values.map((value) => (value - avg) ** 2));
   return Math.sqrt(variance);
 }
-
