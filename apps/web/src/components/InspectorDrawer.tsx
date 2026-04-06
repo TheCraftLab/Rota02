@@ -18,12 +18,28 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign, onToggl
     return null;
   }
 
-  const availableCandidates = cell.candidates.filter((candidate) => candidate.eligible);
   const holidayManaged = cell.status === "holiday" || cell.holidayOverride?.cancelled;
+  const assignmentLocked = cell.status === "holiday";
   const currentValue =
     cell.status === "disabled" || cell.status === "holiday" || cell.assignedAgentName === "Non couvert"
       ? ""
       : resolveAgentKey(cell.assignedAgentId, cell.assignedAgentName);
+  const candidateKeys = new Set(cell.candidates.map((candidate) => resolveAgentKey(candidate.agentId, candidate.agentName)));
+  const candidates = [
+    ...cell.candidates,
+    ...agents
+      .filter((agent) => !candidateKeys.has(resolveAgentKey(agent.agentId, agent.displayName)))
+      .map((agent) => ({
+        agentId: agent.agentId,
+        agentName: agent.displayName,
+        eligible: false,
+        totalAssignedBefore: 0,
+        dayAssignedBefore: 0,
+        previousSlotAssigned: false,
+        decisionRank: [],
+        notes: ["Agent indisponible ou absent du calcul courant pour ce creneau."]
+      }))
+  ];
   const statusTone =
     cell.status === "holiday"
       ? "neutral"
@@ -98,39 +114,26 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign, onToggl
         ) : null}
 
         <div className="mt-6 rounded-3xl bg-white/70 p-4">
-          <label className="block">
-            <span className="text-sm font-semibold text-ink">Remplacer par</span>
-            <select
-              className="mt-3 w-full rounded-2xl border border-slate/15 bg-white px-3 py-3 text-sm text-ink outline-none ring-amber/30 transition focus:ring-4"
-              value={currentValue}
-              disabled={cell.status === "holiday"}
-              onChange={(event) => onManualAssign(cell, event.target.value || null)}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-ink">Affectation rapide</p>
+              <p className="mt-1 text-sm text-slate">
+                Clique directement sur un agent pour le remplacer sur ce creneau.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={assignmentLocked}
+              className={`rounded-full px-5 py-3 text-sm font-semibold transition ${
+                currentValue === ""
+                  ? "bg-coral text-white"
+                  : "border border-slate/15 bg-white text-slate hover:bg-slate/5"
+              } disabled:cursor-not-allowed disabled:opacity-60`}
+              onClick={() => onManualAssign(cell, null)}
             >
-              <option value="">Non couvert</option>
-              {availableCandidates.length ? (
-                <optgroup label="Agents disponibles">
-                  {availableCandidates.map((candidate) => (
-                    <option
-                      key={resolveAgentKey(candidate.agentId, candidate.agentName)}
-                      value={resolveAgentKey(candidate.agentId, candidate.agentName)}
-                    >
-                      {candidate.agentName}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-              <optgroup label="Tous les agents">
-                {agents.map((agent) => (
-                  <option
-                    key={resolveAgentKey(agent.agentId, agent.displayName)}
-                    value={resolveAgentKey(agent.agentId, agent.displayName)}
-                  >
-                    {agent.displayName}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-          </label>
+              Laisser non couvert
+            </button>
+          </div>
         </div>
 
         <div className="mt-6 rounded-3xl bg-white/70 p-4">
@@ -145,28 +148,45 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign, onToggl
         </div>
 
         <div className="mt-6 rounded-3xl bg-white/70 p-4">
-          <p className="text-sm font-semibold text-ink">Agents disponibles pour remplacement</p>
+          <p className="text-sm font-semibold text-ink">Clique sur un agent pour le remplacer</p>
           <div className="mt-3 flex flex-col gap-3">
-            {cell.candidates.map((candidate) => (
-              <div key={resolveAgentKey(candidate.agentId, candidate.agentName)} className="rounded-2xl border border-slate/10 px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-ink">{candidate.agentName}</p>
-                    <p className="mt-1 text-xs text-slate">
-                      Global: {candidate.totalAssignedBefore} - Jour: {candidate.dayAssignedBefore}
-                    </p>
+            {candidates.map((candidate) => {
+              const candidateKey = resolveAgentKey(candidate.agentId, candidate.agentName);
+              const selected = currentValue === candidateKey;
+
+              return (
+                <button
+                  key={candidateKey}
+                  type="button"
+                  disabled={assignmentLocked}
+                  className={`rounded-2xl border px-4 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    selected
+                      ? "border-amber bg-amber/10 shadow-sm"
+                      : candidate.eligible
+                        ? "border-mint/30 bg-mint/5 hover:border-mint/50 hover:bg-mint/10"
+                        : "border-slate/10 bg-white hover:border-slate/20 hover:bg-slate/5"
+                  }`}
+                  onClick={() => onManualAssign(cell, candidateKey)}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-ink">{candidate.agentName}</p>
+                      <p className="mt-1 text-xs text-slate">
+                        Global: {candidate.totalAssignedBefore} - Jour: {candidate.dayAssignedBefore}
+                      </p>
+                    </div>
+                    <StatusBadge tone={candidate.eligible ? "success" : "danger"}>
+                      {candidate.eligible ? "Disponible" : "Bloque"}
+                    </StatusBadge>
                   </div>
-                  <StatusBadge tone={candidate.eligible ? "success" : "danger"}>
-                    {candidate.eligible ? "Disponible" : "Bloque"}
-                  </StatusBadge>
-                </div>
-                <div className="mt-3 flex flex-col gap-2 break-words text-sm text-slate">
-                  {candidate.notes.map((note) => (
-                    <div key={note}>{note}</div>
-                  ))}
-                </div>
-              </div>
-            ))}
+                  <div className="mt-3 flex flex-col gap-2 break-words text-sm text-slate">
+                    {candidate.notes.map((note) => (
+                      <div key={note}>{note}</div>
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
