@@ -1,4 +1,4 @@
-import { useDeferredValue, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useState, useTransition } from "react";
 import {
   DEFAULT_SETTINGS,
   normalizeName,
@@ -15,7 +15,14 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { SummaryPanel } from "./components/SummaryPanel";
 import { UploadCard } from "./components/UploadCard";
 import { StatusBadge } from "./components/StatusBadge";
-import { generateRotationRequest, downloadExport, parseFile } from "./lib/api";
+import {
+  downloadExport,
+  fetchPublishedRotation,
+  generateRotationRequest,
+  parseFile,
+  publishRotation,
+  type PublishedRotationResponse
+} from "./lib/api";
 import { saveBlob } from "./lib/download";
 
 function cellKey(cell: RotationCell): string {
@@ -26,19 +33,99 @@ function resolveAgentKey(agentId: string | null, agentName: string): string {
   return agentId ?? normalizeName(agentName);
 }
 
+function getPathname(): string {
+  return typeof window === "undefined" ? "/" : window.location.pathname || "/";
+}
+
+function navigateTo(pathname: string, onChange: (pathname: string) => void): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.history.pushState({}, "", pathname);
+  onChange(pathname);
+}
+
+function formatPublishedAt(value: string): string {
+  return new Intl.DateTimeFormat("fr-FR", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
+
+interface RouteLinkProps {
+  active: boolean;
+  children: string;
+  href: string;
+  onNavigate: (href: string) => void;
+}
+
+function RouteLink({ active, children, href, onNavigate }: RouteLinkProps) {
+  return (
+    <button
+      type="button"
+      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+        active ? "bg-ink text-white" : "border border-slate/15 bg-white/80 text-slate hover:bg-white"
+      }`}
+      onClick={() => onNavigate(href)}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function App() {
+  const [pathname, setPathname] = useState<string>(getPathname);
   const [parsedSchedule, setParsedSchedule] = useState<ParsedSchedule | null>(null);
   const [settings, setSettings] = useState<RotationSettings>(DEFAULT_SETTINGS);
   const [rotation, setRotation] = useState<RotationResult | null>(null);
+  const [published, setPublished] = useState<PublishedRotationResponse | null>(null);
   const [selectedCellKey, setSelectedCellKey] = useState<string | null>(null);
   const [parseLoading, setParseLoading] = useState(false);
   const [generationLoading, setGenerationLoading] = useState(false);
+  const [publicLoading, setPublicLoading] = useState(true);
+  const [publishLoading, setPublishLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState<"csv" | "xlsx" | "pdf" | "copy" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const deferredRotation = useDeferredValue(rotation);
   const selectedCell =
     deferredRotation?.cells.find((cell) => cellKey(cell) === selectedCellKey) ?? null;
+  const isAdminRoute = pathname.startsWith("/admin");
+
+  useEffect(() => {
+    const handlePopState = () => setPathname(getPathname());
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPublished() {
+      setPublicLoading(true);
+      try {
+        const nextPublished = await fetchPublishedRotation();
+        if (!cancelled) {
+          setPublished(nextPublished);
+        }
+      } catch (caughtError) {
+        if (!cancelled) {
+          setError(caughtError instanceof Error ? caughtError.message : "Erreur de chargement public.");
+        }
+      } finally {
+        if (!cancelled) {
+          setPublicLoading(false);
+        }
+      }
+    }
+
+    void loadPublished();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleFileSelected(file: File) {
     setParseLoading(true);
@@ -81,6 +168,23 @@ export default function App() {
       setError(caughtError instanceof Error ? caughtError.message : "Erreur de generation.");
     } finally {
       setGenerationLoading(false);
+    }
+  }
+
+  async function handlePublish() {
+    if (!rotation) {
+      return;
+    }
+
+    setPublishLoading(true);
+    setError(null);
+    try {
+      const nextPublished = await publishRotation(rotation);
+      setPublished(nextPublished);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Erreur de publication.");
+    } finally {
+      setPublishLoading(false);
     }
   }
 
@@ -181,22 +285,91 @@ export default function App() {
     });
   }
 
+  if (!isAdminRoute) {
+    return (
+      <main className="mx-auto max-w-[1600px] overflow-x-clip px-4 py-8 sm:px-6 lg:px-8">
+        <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.34em] text-slate/70">Atelier11.app - Rotation Chat</p>
+            <h1 className="mt-3 max-w-4xl text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
+              Tableau publie pour les equipes.
+            </h1>
+            <p className="mt-4 max-w-3xl text-base text-slate">
+              Cette page affiche la derniere rotation publiee par l'administration, avec les jours de la semaine et les creneaux.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <RouteLink active={pathname === "/"} href="/" onNavigate={(href) => navigateTo(href, setPathname)}>
+              Vue user
+            </RouteLink>
+            <RouteLink active={false} href="/admin" onNavigate={(href) => navigateTo(href, setPathname)}>
+              Aller a l'admin
+            </RouteLink>
+          </div>
+        </header>
+
+        {error ? (
+          <div className="mb-6 rounded-3xl border border-coral/25 bg-coral/10 px-5 py-4 text-sm text-coral">
+            {error}
+          </div>
+        ) : null}
+
+        {publicLoading ? (
+          <section className="panel-surface rounded-4xl border border-white/70 p-10 text-center shadow-panel">
+            <p className="text-lg font-semibold text-ink">Chargement de la rotation publiee...</p>
+          </section>
+        ) : published?.rotation ? (
+          <div className="grid gap-6">
+            <section className="panel-surface rounded-4xl border border-white/70 p-6 shadow-panel">
+              <div className="flex flex-wrap gap-2">
+                <StatusBadge tone="success">Publiee le {formatPublishedAt(published.publishedAt)}</StatusBadge>
+                <StatusBadge tone="neutral">{published.rotation.dates.length} jour(s)</StatusBadge>
+                <StatusBadge tone="neutral">{published.rotation.summary.totalSlots} creneau(x)</StatusBadge>
+              </div>
+            </section>
+            <RotationTable
+              rotation={published.rotation}
+              selectedCellKey={null}
+              interactive={false}
+              title="Tableau publie"
+              description="Vue de consultation de la rotation actuellement publiee."
+            />
+            <SummaryPanel rotation={published.rotation} />
+          </div>
+        ) : (
+          <section className="panel-surface rounded-4xl border border-white/70 p-10 text-center shadow-panel">
+            <p className="text-lg font-semibold text-ink">Aucune rotation n'est encore publiee.</p>
+            <p className="mt-2 text-sm text-slate">
+              Passez par l'administration pour importer un fichier NICE WFM, generer une rotation puis la publier.
+            </p>
+          </section>
+        )}
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto max-w-[1600px] overflow-x-clip px-4 py-8 sm:px-6 lg:px-8">
       <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.34em] text-slate/70">Atelier11.app - Rotation Chat</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.34em] text-slate/70">Atelier11.app - Administration</p>
           <h1 className="mt-3 max-w-4xl text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
-            Generez un planning de chat fiable a partir d'un export NICE WFM.
+            Generez puis publiez la rotation de chat.
           </h1>
           <p className="mt-4 max-w-3xl text-base text-slate">
-            Le moteur reconstruit la disponibilite reelle, applique une regle metier simple basee sur Open Time et produit une
-            rotation equitable, exportable et retouchable.
+            L'administration gere l'import NICE WFM, la generation, les retouches et la publication vers l'index public.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <StatusBadge tone="neutral">Deployable Docker ARM64</StatusBadge>
-          <StatusBadge tone="neutral">API /api/health</StatusBadge>
+          <RouteLink active={pathname === "/admin"} href="/admin" onNavigate={(href) => navigateTo(href, setPathname)}>
+            Admin
+          </RouteLink>
+          <RouteLink active={false} href="/" onNavigate={(href) => navigateTo(href, setPathname)}>
+            Voir l'index public
+          </RouteLink>
+          {published?.publishedAt ? (
+            <StatusBadge tone="success">Derniere publication {formatPublishedAt(published.publishedAt)}</StatusBadge>
+          ) : null}
           <StatusBadge tone={isPending ? "warning" : "success"}>{isPending ? "Mise a jour..." : "Pret"}</StatusBadge>
         </div>
       </header>
@@ -235,6 +408,14 @@ export default function App() {
             <div className="layout-safe min-w-0 grid gap-6">
               <section className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
                 <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    className="rounded-full bg-amber px-5 py-3 text-sm font-semibold text-white"
+                    onClick={() => void handlePublish()}
+                    disabled={publishLoading}
+                  >
+                    {publishLoading ? "Publication..." : "Publier sur l'index"}
+                  </button>
                   <button
                     type="button"
                     className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white"
@@ -289,7 +470,7 @@ export default function App() {
           <section className="panel-surface rounded-4xl border border-white/70 p-10 text-center shadow-panel">
             <p className="text-lg font-semibold text-ink">La rotation apparaitra ici apres analyse et generation.</p>
             <p className="mt-2 text-sm text-slate">
-              Vous pourrez ensuite exporter le tableau, inspecter chaque decision et ajuster les cellules manuellement.
+              Une fois publiee, elle sera visible directement sur l'index public du site.
             </p>
           </section>
         )}

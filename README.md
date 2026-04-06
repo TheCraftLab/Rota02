@@ -9,7 +9,6 @@ Application web de production pour importer un export NICE WFM, reconstruire la 
 - Backend: Node.js 22 + Express + TypeScript
 - Frontend: React 18 + Vite + TypeScript + Tailwind CSS
 - Coeur metier partage: package TypeScript dedie pour le parsing, les regles metier, l'algorithme et les utilitaires
-- Exports: ExcelJS pour `.xlsx`, export CSV natif
 - Exports: ExcelJS pour `.xlsx`, CSV natif, PDF tabulaire via `pdf-lib`
 - Tests: Vitest sur le module coeur
 
@@ -20,8 +19,8 @@ Application web de production pour importer un export NICE WFM, reconstruire la 
 - Compatible ARM64: image `node:22-bookworm-slim`, dependances JS pures ou largement supportees
 - Separation claire:
   - `packages/core`: parser NICE WFM, eligibility, rotation, resume
-  - `apps/server`: API, extraction PDF/texte, exports, healthcheck, service des assets frontend
-  - `apps/web`: interface React
+  - `apps/server`: API, extraction PDF/texte, exports, healthcheck, publication et service des assets frontend
+  - `apps/web`: interface React avec route admin et index public
 
 ## Arborescence
 
@@ -133,6 +132,10 @@ Pour chaque creneau entre `startTime` et `endTime`:
 
 Retourne un statut simple de sante pour Docker, Portainer et Nginx Proxy Manager.
 
+### `GET /api/published`
+
+Retourne la rotation actuellement publiee pour l'index public.
+
 ### `POST /api/parse`
 
 - `multipart/form-data`
@@ -190,6 +193,16 @@ Corps JSON:
 }
 ```
 
+### `POST /api/publish`
+
+Corps JSON:
+
+```json
+{
+  "rotation": {}
+}
+```
+
 ## Lancement local
 
 ### Prerequis
@@ -213,6 +226,8 @@ Services:
 
 - Frontend Vite: `http://localhost:5173`
 - API Express: `http://localhost:8000`
+- Interface admin en dev: `http://localhost:5173/admin`
+- Index public en dev: `http://localhost:5173/`
 
 Par defaut, le backend ecoute sur `0.0.0.0`.
 
@@ -227,6 +242,11 @@ npm run build
 ```bash
 HOST=0.0.0.0 PORT=8000 npm start
 ```
+
+Routes en production:
+
+- Admin: `/admin`
+- Vue user publiee: `/`
 
 ### Tests
 
@@ -251,6 +271,8 @@ docker run -d \
   -p 8088:8000 \
   -e HOST=0.0.0.0 \
   -e PORT=8000 \
+  -e PUBLISHED_ROTATION_PATH=/data/published-rotation.json \
+  -v rota_chat_data:/data \
   rota-chat-generator:1.0.0
 ```
 
@@ -298,6 +320,7 @@ Parametres NPM conseilles:
 - Port interne du conteneur: `8000`
 - Port host recommande: `8088`
 - Bind reseau: `0.0.0.0`
+- Rotation publiee persistante via `PUBLISHED_ROTATION_PATH`
 - Pas de validation d'host specifique cote application
 - Healthcheck Docker inclus
 - Service unique pour eviter les `502 Bad Gateway` lies a un mauvais port ou a plusieurs conteneurs a chainer
@@ -320,13 +343,16 @@ Dans le code:
 1. Importer un PDF ou TXT NICE WFM.
 2. Verifier que la liste des agents et dates detectes est correcte.
 3. Generer une rotation en `60 minutes`.
-4. Cliquer sur quelques cellules pour verifier la justification et les candidats bloques.
-5. Modifier une cellule manuellement et verifier que le resume change.
-6. Exporter en CSV, XLSX puis PDF.
-7. Verifier `GET /api/health`.
-8. Verifier le statut `healthy` du conteneur.
-9. Configurer NPM vers `http://IP_LAN_DU_RASPBERRY_PI:8088`.
-10. Tester l'acces en LAN puis via le domaine.
+4. Verifier que le tableau affiche le jour de semaine dans les colonnes.
+5. Cliquer sur quelques cellules pour verifier la justification et les candidats bloques.
+6. Modifier une cellule manuellement et verifier que le resume change.
+7. Publier la rotation sur l'index.
+8. Verifier la page publique `/`.
+9. Exporter en CSV, XLSX puis PDF.
+10. Verifier `GET /api/health`.
+11. Verifier le statut `healthy` du conteneur.
+12. Configurer NPM vers `http://IP_LAN_DU_RASPBERRY_PI:8088`.
+13. Tester l'acces en LAN puis via le domaine.
 
 ## Procedure de validation avant mise en production
 
@@ -334,8 +360,10 @@ Dans le code:
 - `npm run build`
 - `docker compose up -d --build`
 - `curl http://IP_LAN_DU_RASPBERRY_PI:8088/api/health`
+- `curl http://IP_LAN_DU_RASPBERRY_PI:8088/api/published`
 - ouverture de l'URL proxifiee
 - import d'un vrai export NICE WFM
+- publication d'une rotation puis verification sur `/`
 - verification d'au moins un export Excel
 - verification d'au moins un export PDF
 

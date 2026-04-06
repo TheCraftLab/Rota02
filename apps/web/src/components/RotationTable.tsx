@@ -1,23 +1,33 @@
-import { formatDisplayDate, type RotationCell, type RotationResult } from "@rota/core";
+import { formatDisplayDate, formatWeekday, type RotationCell, type RotationResult } from "@rota/core";
 
 interface RotationTableProps {
   rotation: RotationResult;
   selectedCellKey: string | null;
-  onSelectCell: (cell: RotationCell) => void;
+  onSelectCell?: (cell: RotationCell) => void;
+  interactive?: boolean;
+  title?: string;
+  description?: string;
 }
 
 function cellKey(cell: RotationCell): string {
   return `${cell.date}-${cell.slotStart}`;
 }
 
-export function RotationTable({ rotation, selectedCellKey, onSelectCell }: RotationTableProps) {
+export function RotationTable({
+  rotation,
+  selectedCellKey,
+  onSelectCell,
+  interactive = true,
+  title = "Rotation de chat editable",
+  description = "Cliquez sur une cellule pour afficher les raisons de choix ou la modifier."
+}: RotationTableProps) {
   return (
     <section className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
       <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate/70">Tableau</p>
-          <h2 className="mt-2 text-2xl font-semibold text-ink">Rotation de chat editable</h2>
-          <p className="mt-2 text-sm text-slate">Cliquez sur une cellule pour afficher les raisons de choix ou la modifier.</p>
+          <h2 className="mt-2 text-2xl font-semibold text-ink">{title}</h2>
+          <p className="mt-2 text-sm text-slate">{description}</p>
         </div>
       </div>
 
@@ -29,9 +39,10 @@ export function RotationTable({ rotation, selectedCellKey, onSelectCell }: Rotat
                 Heure
               </th>
               {rotation.dates.map((date) => (
-                <th key={date} className="min-w-[180px] border-b border-slate/10 px-4 py-3 font-semibold text-ink">
-                  {formatDisplayDate(date)}
-                </th>
+              <th key={date} className="min-w-[180px] border-b border-slate/10 px-4 py-3 font-semibold text-ink">
+                  <div className="text-xs uppercase tracking-[0.12em] text-slate/70">{formatWeekday(date)}</div>
+                  <div className="mt-1">{formatDisplayDate(date)}</div>
+              </th>
               ))}
             </tr>
           </thead>
@@ -61,17 +72,24 @@ export function RotationTable({ rotation, selectedCellKey, onSelectCell }: Rotat
 
                   return (
                     <td key={cellKey(cell)} className="min-w-[180px] border-b border-slate/10 px-3 py-3 align-top">
-                      <button
-                        type="button"
-                        title={cell.reasons.join(" ")}
-                        className={`w-full break-words rounded-2xl border px-4 py-3 text-left transition ${
-                          selected ? "border-ink shadow-lg" : "border-transparent"
-                        } ${tone}`}
-                        onClick={() => onSelectCell(cell)}
-                      >
-                        <div className="font-semibold">{cell.assignedAgentName}</div>
-                        <div className="mt-1 text-xs opacity-80">{cell.slotStart} - {cell.slotEnd}</div>
-                      </button>
+                      {interactive ? (
+                        <button
+                          type="button"
+                          title={cell.reasons.join(" ")}
+                          className={`w-full break-words rounded-2xl border px-4 py-3 text-left transition ${
+                            selected ? "border-ink shadow-lg" : "border-transparent"
+                          } ${tone}`}
+                          onClick={() => onSelectCell?.(cell)}
+                        >
+                          <div className="font-semibold">{cell.assignedAgentName}</div>
+                          <div className="mt-1 text-xs opacity-80">{cell.slotStart} - {cell.slotEnd}</div>
+                        </button>
+                      ) : (
+                        <div className={`w-full break-words rounded-2xl border px-4 py-3 text-left ${tone}`}>
+                          <div className="font-semibold">{cell.assignedAgentName}</div>
+                          <div className="mt-1 text-xs opacity-80">{cell.slotStart} - {cell.slotEnd}</div>
+                        </div>
+                      )}
                     </td>
                   );
                 })}

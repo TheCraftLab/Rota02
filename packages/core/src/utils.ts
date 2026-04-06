@@ -47,6 +47,12 @@ export function formatDisplayDate(isoDate: string): string {
   return `${day}/${month}/${year}`;
 }
 
+export function formatWeekday(isoDate: string, locale = "fr-FR"): string {
+  const date = new Date(`${isoDate}T12:00:00`);
+  const label = new Intl.DateTimeFormat(locale, { weekday: "long" }).format(date);
+  return label ? `${label.charAt(0).toUpperCase()}${label.slice(1)}` : isoDate;
+}
+
 export function inferIsoDate(raw: string, defaultYear: number): string | null {
   const match = raw.match(/(\d{2})\/(\d{2})(?:\/(\d{4}|\d{2}))?/);
   if (!match) {

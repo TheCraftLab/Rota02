@@ -14,6 +14,7 @@ import {
 import { config } from "./config";
 import { buildRotationCsv, buildRotationPdf, buildRotationWorkbook } from "./exporters";
 import { extractTextFromUpload } from "./file-extractor";
+import { readPublishedRotation, writePublishedRotation } from "./published-store";
 
 const app = express();
 const upload = multer({
@@ -37,6 +38,22 @@ app.get("/api/health", (_request, response) => {
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
   });
+});
+
+app.get("/api/published", async (_request, response) => {
+  try {
+    const published = await readPublishedRotation(config.publishedRotationPath);
+    if (!published) {
+      response.status(404).json({ error: "Aucune rotation n'a encore ete publiee." });
+      return;
+    }
+
+    response.json(published);
+  } catch (error) {
+    response.status(500).json({
+      error: error instanceof Error ? error.message : "Impossible de charger la rotation publiee."
+    });
+  }
 });
 
 app.post("/api/parse", upload.single("file"), async (request, response) => {
@@ -151,6 +168,23 @@ app.post("/api/export/clipboard", (request, response) => {
   response.json({
     clipboard: toClipboardTable(rotation)
   });
+});
+
+app.post("/api/publish", async (request, response) => {
+  try {
+    const rotation = request.body.rotation as RotationResult | undefined;
+    if (!rotation) {
+      response.status(400).json({ error: "Rotation absente." });
+      return;
+    }
+
+    const published = await writePublishedRotation(config.publishedRotationPath, rotation);
+    response.json(published);
+  } catch (error) {
+    response.status(500).json({
+      error: error instanceof Error ? error.message : "Impossible de publier la rotation."
+    });
+  }
 });
 
 const webDistPath = path.resolve(__dirname, "../../web/dist");
