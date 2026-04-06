@@ -13,7 +13,7 @@ import {
   type ParsedSchedule
 } from "@rota/core";
 import { config } from "./config";
-import { buildRotationCsv, buildRotationWorkbook } from "./exporters";
+import { buildRotationCsv, buildRotationPdf, buildRotationWorkbook } from "./exporters";
 import { extractTextFromUpload } from "./file-extractor";
 
 const app = express();
@@ -124,6 +124,25 @@ app.post("/api/export/xlsx", async (request, response) => {
   } catch (error) {
     response.status(500).json({
       error: error instanceof Error ? error.message : "Echec de l'export Excel."
+    });
+  }
+});
+
+app.post("/api/export/pdf", async (request, response) => {
+  try {
+    const rotation = request.body.rotation as RotationResult | undefined;
+    if (!rotation) {
+      response.status(400).json({ error: "Rotation absente." });
+      return;
+    }
+
+    const buffer = await buildRotationPdf(rotation);
+    response.setHeader("Content-Type", "application/pdf");
+    response.setHeader("Content-Disposition", 'attachment; filename="rotation-chat.pdf"');
+    response.send(buffer);
+  } catch (error) {
+    response.status(500).json({
+      error: error instanceof Error ? error.message : "Echec de l'export PDF."
     });
   }
 });

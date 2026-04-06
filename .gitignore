@@ -6,4 +6,5 @@ coverage
 apps/web/dist
 apps/server/dist
 packages/core/dist
-
+tmp/
+output/

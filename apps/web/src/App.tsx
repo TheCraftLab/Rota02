@@ -36,7 +36,7 @@ export default function App() {
   const [selectedCellKey, setSelectedCellKey] = useState<string | null>(null);
   const [parseLoading, setParseLoading] = useState(false);
   const [generationLoading, setGenerationLoading] = useState(false);
-  const [exportLoading, setExportLoading] = useState<"csv" | "xlsx" | "copy" | null>(null);
+  const [exportLoading, setExportLoading] = useState<"csv" | "xlsx" | "pdf" | "copy" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const deferredRotation = useDeferredValue(rotation);
@@ -128,7 +128,7 @@ export default function App() {
     }
   }
 
-  async function handleExport(kind: "csv" | "xlsx") {
+  async function handleExport(kind: "csv" | "xlsx" | "pdf") {
     if (!rotation) {
       return;
     }
@@ -288,6 +288,14 @@ export default function App() {
                     disabled={exportLoading !== null}
                   >
                     {exportLoading === "xlsx" ? "Export Excel..." : "Exporter en .xlsx"}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate/15 bg-white px-5 py-3 text-sm font-semibold text-slate"
+                    onClick={() => void handleExport("pdf")}
+                    disabled={exportLoading !== null}
+                  >
+                    {exportLoading === "pdf" ? "Export PDF..." : "Exporter en .pdf"}
                   </button>
                   <button
                     type="button"

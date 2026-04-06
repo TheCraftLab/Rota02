@@ -10,6 +10,7 @@ Application web de production pour importer un export NICE WFM, reconstruire la 
 - Frontend: React 18 + Vite + TypeScript + Tailwind CSS
 - Coeur metier partage: package TypeScript dedie pour le parsing, les regles metier, l'algorithme et les utilitaires
 - Exports: ExcelJS pour `.xlsx`, export CSV natif
+- Exports: ExcelJS pour `.xlsx`, CSV natif, PDF tabulaire via `pdf-lib`
 - Tests: Vitest sur le module coeur
 
 ### Pourquoi cette architecture
@@ -188,6 +189,16 @@ Corps JSON:
 }
 ```
 
+### `POST /api/export/pdf`
+
+Corps JSON:
+
+```json
+{
+  "rotation": {}
+}
+```
+
 ## Lancement local
 
 ### Prerequis
@@ -210,7 +221,7 @@ npm run dev
 Services:
 
 - Frontend Vite: `http://localhost:5173`
-- API Express: `http://localhost:8080`
+- API Express: `http://localhost:8000`
 
 Par defaut, le backend ecoute sur `0.0.0.0`.
 
@@ -223,7 +234,7 @@ npm run build
 ### Lancement production local
 
 ```bash
-HOST=0.0.0.0 PORT=8080 npm start
+HOST=0.0.0.0 PORT=8000 npm start
 ```
 
 ### Tests
@@ -246,9 +257,9 @@ docker build -t rota-chat-generator:1.0.0 .
 docker run -d \
   --name rota-chat \
   --restart unless-stopped \
-  -p 8088:8080 \
+  -p 8088:8000 \
   -e HOST=0.0.0.0 \
-  -e PORT=8080 \
+  -e PORT=8000 \
   rota-chat-generator:1.0.0
 ```
 
@@ -293,7 +304,7 @@ Parametres NPM conseilles:
 
 ## Ports et stabilite
 
-- Port interne du conteneur: `8080`
+- Port interne du conteneur: `8000`
 - Port host recommande: `8088`
 - Bind reseau: `0.0.0.0`
 - Pas de validation d'host specifique cote application
@@ -320,7 +331,7 @@ Dans le code:
 3. Generer une rotation en `60 minutes`.
 4. Cliquer sur quelques cellules pour verifier la justification et les candidats bloques.
 5. Modifier une cellule manuellement et verifier que le resume change.
-6. Exporter en CSV puis XLSX.
+6. Exporter en CSV, XLSX puis PDF.
 7. Verifier `GET /api/health`.
 8. Verifier le statut `healthy` du conteneur.
 9. Configurer NPM vers `http://IP_LAN_DU_RASPBERRY_PI:8088`.
@@ -335,6 +346,7 @@ Dans le code:
 - ouverture de l'URL proxifiee
 - import d'un vrai export NICE WFM
 - verification d'au moins un export Excel
+- verification d'au moins un export PDF
 
 ## Limites connues
 

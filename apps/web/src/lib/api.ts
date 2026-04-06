@@ -43,7 +43,7 @@ export async function generateRotationRequest(
   return response.json();
 }
 
-export async function downloadExport(rotation: RotationResult, kind: "csv" | "xlsx"): Promise<Blob> {
+export async function downloadExport(rotation: RotationResult, kind: "csv" | "xlsx" | "pdf"): Promise<Blob> {
   const response = await fetch(`/api/export/${kind}`, {
     method: "POST",
     headers: {
@@ -59,4 +59,3 @@ export async function downloadExport(rotation: RotationResult, kind: "csv" | "xl
 
   return response.blob();
 }
-
