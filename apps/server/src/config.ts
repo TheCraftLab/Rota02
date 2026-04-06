@@ -6,5 +6,9 @@ export const config = {
   apiJsonLimit: process.env.API_JSON_LIMIT || "5mb",
   uploadLimitBytes: Number(process.env.UPLOAD_LIMIT_BYTES || 10 * 1024 * 1024),
   publishedRotationPath:
-    process.env.PUBLISHED_ROTATION_PATH || path.resolve(process.cwd(), "data/published-rotation.json")
+    process.env.PUBLISHED_ROTATION_PATH || path.resolve(process.cwd(), "data/published-rotation.json"),
+  adminPassword: process.env.ADMIN_PASSWORD || "admin123",
+  adminSessionSecret: process.env.ADMIN_SESSION_SECRET || process.env.ADMIN_PASSWORD || "admin123",
+  adminSessionCookieName: "rota_admin_session",
+  adminSessionTtlMs: 1000 * 60 * 60 * 12
 };

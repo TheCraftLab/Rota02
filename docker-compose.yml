@@ -13,6 +13,7 @@ services:
       PORT: "8000"
       API_JSON_LIMIT: "5mb"
       UPLOAD_LIMIT_BYTES: "10485760"
+      ADMIN_PASSWORD: "admin123"
       PUBLISHED_ROTATION_PATH: "/data/published-rotation.json"
     ports:
       - "8088:8000"

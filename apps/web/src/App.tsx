@@ -9,6 +9,7 @@ import {
   type RotationResult,
   type RotationSettings
 } from "@rota/core";
+import { AdminLogin } from "./components/AdminLogin";
 import { InspectorDrawer } from "./components/InspectorDrawer";
 import { RotationTable } from "./components/RotationTable";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -17,8 +18,11 @@ import { UploadCard } from "./components/UploadCard";
 import { StatusBadge } from "./components/StatusBadge";
 import {
   downloadExport,
+  fetchAdminSession,
   fetchPublishedRotation,
   generateRotationRequest,
+  loginAdmin,
+  logoutAdmin,
   parseFile,
   publishRotation,
   type PublishedRotationResponse
@@ -80,6 +84,9 @@ export default function App() {
   const [settings, setSettings] = useState<RotationSettings>(DEFAULT_SETTINGS);
   const [rotation, setRotation] = useState<RotationResult | null>(null);
   const [published, setPublished] = useState<PublishedRotationResponse | null>(null);
+  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const [adminChecking, setAdminChecking] = useState(true);
+  const [adminLoginLoading, setAdminLoginLoading] = useState(false);
   const [selectedCellKey, setSelectedCellKey] = useState<string | null>(null);
   const [parseLoading, setParseLoading] = useState(false);
   const [generationLoading, setGenerationLoading] = useState(false);
@@ -127,6 +134,49 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAdminSession() {
+      if (!isAdminRoute) {
+        setAdminChecking(false);
+        return;
+      }
+
+      setAdminChecking(true);
+      try {
+        const session = await fetchAdminSession();
+        if (!cancelled) {
+          setAdminAuthenticated(session.authenticated);
+        }
+      } catch (caughtError) {
+        if (!cancelled) {
+          setError(caughtError instanceof Error ? caughtError.message : "Erreur de session admin.");
+          setAdminAuthenticated(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setAdminChecking(false);
+        }
+      }
+    }
+
+    void loadAdminSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdminRoute]);
+
+  function handleAuthError(caughtError: unknown, fallback: string): string {
+    if (caughtError instanceof Error && caughtError.name === "AuthError") {
+      setAdminAuthenticated(false);
+      return "Authentification admin requise.";
+    }
+
+    return caughtError instanceof Error ? caughtError.message : fallback;
+  }
+
   async function handleFileSelected(file: File) {
     setParseLoading(true);
     setError(null);
@@ -140,7 +190,7 @@ export default function App() {
         setSelectedCellKey(null);
       });
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Erreur d'import.");
+      setError(handleAuthError(caughtError, "Erreur d'import."));
     } finally {
       setParseLoading(false);
     }
@@ -165,7 +215,7 @@ export default function App() {
         setSelectedCellKey(nextRotation.cells[0] ? cellKey(nextRotation.cells[0]) : null);
       });
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Erreur de generation.");
+      setError(handleAuthError(caughtError, "Erreur de generation."));
     } finally {
       setGenerationLoading(false);
     }
@@ -182,7 +232,7 @@ export default function App() {
       const nextPublished = await publishRotation(rotation);
       setPublished(nextPublished);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Erreur de publication.");
+      setError(handleAuthError(caughtError, "Erreur de publication."));
     } finally {
       setPublishLoading(false);
     }
@@ -199,7 +249,7 @@ export default function App() {
       const blob = await downloadExport(rotation, kind);
       saveBlob(blob, `rotation-chat.${kind}`);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Erreur d'export.");
+      setError(handleAuthError(caughtError, "Erreur d'export."));
     } finally {
       setExportLoading(null);
     }
@@ -215,9 +265,33 @@ export default function App() {
     try {
       await navigator.clipboard.writeText(toClipboardTable(rotation));
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Impossible de copier le tableau.");
+      setError(handleAuthError(caughtError, "Impossible de copier le tableau."));
     } finally {
       setExportLoading(null);
+    }
+  }
+
+  async function handleAdminLogin(password: string) {
+    setAdminLoginLoading(true);
+    setError(null);
+
+    try {
+      const session = await loginAdmin(password);
+      setAdminAuthenticated(session.authenticated);
+    } catch (caughtError) {
+      setError(handleAuthError(caughtError, "Erreur de connexion admin."));
+    } finally {
+      setAdminLoginLoading(false);
+    }
+  }
+
+  async function handleAdminLogout() {
+    setError(null);
+    try {
+      await logoutAdmin();
+      setAdminAuthenticated(false);
+    } catch (caughtError) {
+      setError(handleAuthError(caughtError, "Erreur de deconnexion admin."));
     }
   }
 
@@ -288,23 +362,10 @@ export default function App() {
   if (!isAdminRoute) {
     return (
       <main className="mx-auto max-w-[1600px] overflow-x-clip px-4 py-8 sm:px-6 lg:px-8">
-        <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.34em] text-slate/70">Atelier11.app - Rotation Chat</p>
-            <h1 className="mt-3 max-w-4xl text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
-              Tableau publie pour les equipes.
-            </h1>
-            <p className="mt-4 max-w-3xl text-base text-slate">
-              Cette page affiche la derniere rotation publiee par l'administration, avec les jours de la semaine et les creneaux.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <RouteLink active={pathname === "/"} href="/" onNavigate={(href) => navigateTo(href, setPathname)}>
-              Vue user
-            </RouteLink>
-            <RouteLink active={false} href="/admin" onNavigate={(href) => navigateTo(href, setPathname)}>
-              Aller a l'admin
-            </RouteLink>
+        <header className="mb-8">
+          <div className="panel-surface rounded-4xl border border-white/70 px-6 py-6 shadow-panel sm:px-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.34em] text-slate/60">Atelier11.app</p>
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-ink sm:text-5xl">Planning Chat</h1>
           </div>
         </header>
 
@@ -320,21 +381,14 @@ export default function App() {
           </section>
         ) : published?.rotation ? (
           <div className="grid gap-6">
-            <section className="panel-surface rounded-4xl border border-white/70 p-6 shadow-panel">
-              <div className="flex flex-wrap gap-2">
-                <StatusBadge tone="success">Publiee le {formatPublishedAt(published.publishedAt)}</StatusBadge>
-                <StatusBadge tone="neutral">{published.rotation.dates.length} jour(s)</StatusBadge>
-                <StatusBadge tone="neutral">{published.rotation.summary.totalSlots} creneau(x)</StatusBadge>
-              </div>
-            </section>
             <RotationTable
               rotation={published.rotation}
               selectedCellKey={null}
               interactive={false}
-              title="Tableau publie"
-              description="Vue de consultation de la rotation actuellement publiee."
+              title="Rotation chat"
+              description={`Publication du ${formatPublishedAt(published.publishedAt)}`}
+              density="kiosk"
             />
-            <SummaryPanel rotation={published.rotation} />
           </div>
         ) : (
           <section className="panel-surface rounded-4xl border border-white/70 p-10 text-center shadow-panel">
@@ -344,6 +398,22 @@ export default function App() {
             </p>
           </section>
         )}
+
+        <footer className="mt-8 border-t border-slate/10 px-2 pt-6 text-sm text-slate">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p>© {new Date().getFullYear()} Atelier11.app</p>
+            {published?.publishedAt ? (
+              <p>Derniere mise a jour: {formatPublishedAt(published.publishedAt)}</p>
+            ) : null}
+            <button
+              type="button"
+              className="text-left font-semibold text-slate underline underline-offset-4 hover:text-ink sm:text-right"
+              onClick={() => navigateTo("/admin", setPathname)}
+            >
+              Acces administration
+            </button>
+          </div>
+        </footer>
       </main>
     );
   }
@@ -371,6 +441,15 @@ export default function App() {
             <StatusBadge tone="success">Derniere publication {formatPublishedAt(published.publishedAt)}</StatusBadge>
           ) : null}
           <StatusBadge tone={isPending ? "warning" : "success"}>{isPending ? "Mise a jour..." : "Pret"}</StatusBadge>
+          {adminAuthenticated ? (
+            <button
+              type="button"
+              className="rounded-full border border-slate/15 bg-white/80 px-4 py-2 text-sm font-semibold text-slate hover:bg-white"
+              onClick={() => void handleAdminLogout()}
+            >
+              Se deconnecter
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -380,6 +459,13 @@ export default function App() {
         </div>
       ) : null}
 
+      {adminChecking ? (
+        <section className="panel-surface rounded-4xl border border-white/70 p-10 text-center shadow-panel">
+          <p className="text-lg font-semibold text-ink">Verification de la session admin...</p>
+        </section>
+      ) : !adminAuthenticated ? (
+        <AdminLogin loading={adminLoginLoading} onLogin={handleAdminLogin} />
+      ) : (
       <div className="grid gap-6">
         <UploadCard parsedSchedule={parsedSchedule} loading={parseLoading} onFileSelected={handleFileSelected} />
         <SettingsPanel
@@ -475,6 +561,7 @@ export default function App() {
           </section>
         )}
       </div>
+      )}
     </main>
   );
 }

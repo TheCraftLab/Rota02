@@ -10,18 +10,31 @@ export interface PublishedRotationResponse {
   publishedAt: string;
 }
 
+export interface AdminSessionResponse {
+  authenticated: boolean;
+}
+
+async function parseApiError(response: Response, fallback: string): Promise<Error> {
+  const payload = await response.json().catch(() => ({ error: fallback }));
+  const error = new Error(payload.error ?? fallback);
+  if (response.status === 401) {
+    error.name = "AuthError";
+  }
+  return error;
+}
+
 export async function parseFile(file: File): Promise<ParseResponse> {
   const formData = new FormData();
   formData.append("file", file);
 
   const response = await fetch("/api/parse", {
     method: "POST",
-    body: formData
+    body: formData,
+    credentials: "same-origin"
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: "Erreur d'analyse." }));
-    throw new Error(payload.error ?? "Erreur d'analyse.");
+    throw await parseApiError(response, "Erreur d'analyse.");
   }
 
   return response.json();
@@ -36,12 +49,12 @@ export async function generateRotationRequest(
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ parsedSchedule, settings })
+    body: JSON.stringify({ parsedSchedule, settings }),
+    credentials: "same-origin"
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: "Erreur de generation." }));
-    throw new Error(payload.error ?? "Erreur de generation.");
+    throw await parseApiError(response, "Erreur de generation.");
   }
 
   return response.json();
@@ -53,12 +66,12 @@ export async function downloadExport(rotation: RotationResult, kind: "csv" | "xl
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ rotation })
+    body: JSON.stringify({ rotation }),
+    credentials: "same-origin"
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: "Erreur d'export." }));
-    throw new Error(payload.error ?? "Erreur d'export.");
+    throw await parseApiError(response, "Erreur d'export.");
   }
 
   return response.blob();
@@ -70,12 +83,12 @@ export async function publishRotation(rotation: RotationResult): Promise<Publish
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ rotation })
+    body: JSON.stringify({ rotation }),
+    credentials: "same-origin"
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: "Erreur de publication." }));
-    throw new Error(payload.error ?? "Erreur de publication.");
+    throw await parseApiError(response, "Erreur de publication.");
   }
 
   return response.json();
@@ -89,8 +102,49 @@ export async function fetchPublishedRotation(): Promise<PublishedRotationRespons
   }
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: "Erreur de chargement public." }));
-    throw new Error(payload.error ?? "Erreur de chargement public.");
+    throw await parseApiError(response, "Erreur de chargement public.");
+  }
+
+  return response.json();
+}
+
+export async function fetchAdminSession(): Promise<AdminSessionResponse> {
+  const response = await fetch("/api/admin/session", {
+    credentials: "same-origin"
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, "Erreur de session admin.");
+  }
+
+  return response.json();
+}
+
+export async function loginAdmin(password: string): Promise<AdminSessionResponse> {
+  const response = await fetch("/api/admin/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    credentials: "same-origin",
+    body: JSON.stringify({ password })
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, "Erreur de connexion admin.");
+  }
+
+  return response.json();
+}
+
+export async function logoutAdmin(): Promise<AdminSessionResponse> {
+  const response = await fetch("/api/admin/logout", {
+    method: "POST",
+    credentials: "same-origin"
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, "Erreur de deconnexion admin.");
   }
 
   return response.json();

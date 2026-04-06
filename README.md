@@ -136,6 +136,24 @@ Retourne un statut simple de sante pour Docker, Portainer et Nginx Proxy Manager
 
 Retourne la rotation actuellement publiee pour l'index public.
 
+### `GET /api/admin/session`
+
+Retourne l'etat de session admin courant.
+
+### `POST /api/admin/login`
+
+Corps JSON:
+
+```json
+{
+  "password": "admin123"
+}
+```
+
+### `POST /api/admin/logout`
+
+Termine la session admin en cours.
+
 ### `POST /api/parse`
 
 - `multipart/form-data`
@@ -271,6 +289,7 @@ docker run -d \
   -p 8088:8000 \
   -e HOST=0.0.0.0 \
   -e PORT=8000 \
+  -e ADMIN_PASSWORD=admin123 \
   -e PUBLISHED_ROTATION_PATH=/data/published-rotation.json \
   -v rota_chat_data:/data \
   rota-chat-generator:1.0.0
@@ -320,6 +339,7 @@ Parametres NPM conseilles:
 - Port interne du conteneur: `8000`
 - Port host recommande: `8088`
 - Bind reseau: `0.0.0.0`
+- Admin protege par mot de passe via cookie de session HTTP-only
 - Rotation publiee persistante via `PUBLISHED_ROTATION_PATH`
 - Pas de validation d'host specifique cote application
 - Healthcheck Docker inclus
@@ -361,6 +381,7 @@ Dans le code:
 - `docker compose up -d --build`
 - `curl http://IP_LAN_DU_RASPBERRY_PI:8088/api/health`
 - `curl http://IP_LAN_DU_RASPBERRY_PI:8088/api/published`
+- connexion admin sur `/admin` avec le mot de passe `admin123`
 - ouverture de l'URL proxifiee
 - import d'un vrai export NICE WFM
 - publication d'une rotation puis verification sur `/`

@@ -11,6 +11,7 @@ import {
   type RotationSettings,
   type ParsedSchedule
 } from "@rota/core";
+import { isAdminAuthenticated, loginAdmin, logoutAdmin, requireAdminAuth, verifyAdminPassword } from "./auth";
 import { config } from "./config";
 import { buildRotationCsv, buildRotationPdf, buildRotationWorkbook } from "./exporters";
 import { extractTextFromUpload } from "./file-extractor";
@@ -40,6 +41,29 @@ app.get("/api/health", (_request, response) => {
   });
 });
 
+app.get("/api/admin/session", (request, response) => {
+  response.json({
+    authenticated: isAdminAuthenticated(request)
+  });
+});
+
+app.post("/api/admin/login", (request, response) => {
+  const password = typeof request.body?.password === "string" ? request.body.password : "";
+
+  if (!verifyAdminPassword(password)) {
+    response.status(401).json({ error: "Mot de passe invalide." });
+    return;
+  }
+
+  loginAdmin(response);
+  response.json({ authenticated: true });
+});
+
+app.post("/api/admin/logout", (_request, response) => {
+  logoutAdmin(response);
+  response.json({ authenticated: false });
+});
+
 app.get("/api/published", async (_request, response) => {
   try {
     const published = await readPublishedRotation(config.publishedRotationPath);
@@ -56,7 +80,7 @@ app.get("/api/published", async (_request, response) => {
   }
 });
 
-app.post("/api/parse", upload.single("file"), async (request, response) => {
+app.post("/api/parse", requireAdminAuth, upload.single("file"), async (request, response) => {
   try {
     if (!request.file) {
       response.status(400).json({ error: "Aucun fichier n'a ete envoye." });
@@ -85,7 +109,7 @@ app.post("/api/parse", upload.single("file"), async (request, response) => {
   }
 });
 
-app.post("/api/generate", (request, response) => {
+app.post("/api/generate", requireAdminAuth, (request, response) => {
   try {
     const parsedSchedule = request.body.parsedSchedule as ParsedSchedule | undefined;
     const settings = request.body.settings as Partial<RotationSettings> | undefined;
@@ -104,7 +128,7 @@ app.post("/api/generate", (request, response) => {
   }
 });
 
-app.post("/api/export/csv", (request, response) => {
+app.post("/api/export/csv", requireAdminAuth, (request, response) => {
   const rotation = request.body.rotation as RotationResult | undefined;
   if (!rotation) {
     response.status(400).json({ error: "Rotation absente." });
@@ -117,7 +141,7 @@ app.post("/api/export/csv", (request, response) => {
   response.send(csv);
 });
 
-app.post("/api/export/xlsx", async (request, response) => {
+app.post("/api/export/xlsx", requireAdminAuth, async (request, response) => {
   try {
     const rotation = request.body.rotation as RotationResult | undefined;
     if (!rotation) {
@@ -139,7 +163,7 @@ app.post("/api/export/xlsx", async (request, response) => {
   }
 });
 
-app.post("/api/export/pdf", async (request, response) => {
+app.post("/api/export/pdf", requireAdminAuth, async (request, response) => {
   try {
     const rotation = request.body.rotation as RotationResult | undefined;
     if (!rotation) {
@@ -158,7 +182,7 @@ app.post("/api/export/pdf", async (request, response) => {
   }
 });
 
-app.post("/api/export/clipboard", (request, response) => {
+app.post("/api/export/clipboard", requireAdminAuth, (request, response) => {
   const rotation = request.body.rotation as RotationResult | undefined;
   if (!rotation) {
     response.status(400).json({ error: "Rotation absente." });
@@ -170,7 +194,7 @@ app.post("/api/export/clipboard", (request, response) => {
   });
 });
 
-app.post("/api/publish", async (request, response) => {
+app.post("/api/publish", requireAdminAuth, async (request, response) => {
   try {
     const rotation = request.body.rotation as RotationResult | undefined;
     if (!rotation) {
