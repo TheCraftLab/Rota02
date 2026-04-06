@@ -30,6 +30,12 @@ Agent: 3109551 Petit, Marc
 09:00 18:00 Open Time
 `;
 
+const CONCATENATED_AGENT_HEADER_INPUT = `
+Agent: 3010957 Defougere, Lucie DateDebutFinActivite planifieeDebutFin
+07/04/2026
+09:00 18:00 Open Time
+`;
+
 describe("parseNiceWfmText", () => {
   it("detects agents, dates and intervals from a NICE-style export", () => {
     const parsed = parseNiceWfmText(SAMPLE_INPUT, "sample.txt", "text/plain", new Date("2026-04-01T10:00:00Z"));
@@ -37,14 +43,23 @@ describe("parseNiceWfmText", () => {
     expect(parsed.agents).toHaveLength(3);
     expect(parsed.dates).toEqual(["2026-04-07", "2026-04-08"]);
     expect(parsed.agents[0]?.days["2026-04-07"]?.intervals).toHaveLength(3);
+    expect(parsed.agents[0]?.displayName).toBe("Isabel Assfeld");
     expect(parsed.agents[2]?.days["2026-04-08"]?.intervals[0]?.activity).toBe("Open Time");
+  });
+
+  it("cuts concatenated NICE column headers from the agent line", () => {
+    const parsed = parseNiceWfmText(CONCATENATED_AGENT_HEADER_INPUT);
+
+    expect(parsed.agents).toHaveLength(1);
+    expect(parsed.agents[0]?.agentId).toBe("3010957");
+    expect(parsed.agents[0]?.displayName).toBe("Lucie Defougere");
   });
 });
 
 describe("evaluateAgentEligibility", () => {
   it("blocks a slot when a brief overlaps the slot", () => {
     const parsed = parseNiceWfmText(SAMPLE_INPUT);
-    const agent = parsed.agents.find((item) => item.displayName === "Assfeld, Isabel");
+    const agent = parsed.agents.find((item) => item.displayName === "Isabel Assfeld");
 
     expect(agent).toBeDefined();
 
@@ -55,7 +70,7 @@ describe("evaluateAgentEligibility", () => {
 
   it("treats alternance as eligible only when enabled", () => {
     const parsed = parseNiceWfmText(SAMPLE_INPUT);
-    const agent = parsed.agents.find((item) => item.displayName === "Petit, Marc");
+    const agent = parsed.agents.find((item) => item.displayName === "Marc Petit");
 
     expect(agent).toBeDefined();
 
@@ -91,7 +106,7 @@ describe("generateRotation", () => {
       .filter((cell) => cell.date === "2026-04-07")
       .map((cell) => cell.assignedAgentName);
 
-    expect(firstDayAssignments).toEqual(["Assfeld, Isabel", "Petit, Marc", "Martin, Lea", "Petit, Marc"]);
+    expect(firstDayAssignments).toEqual(["Isabel Assfeld", "Marc Petit", "Lea Martin", "Marc Petit"]);
     expect(rotation.cells.map((cell) => cell.assignedAgentName)).toEqual(
       secondPass.cells.map((cell) => cell.assignedAgentName)
     );

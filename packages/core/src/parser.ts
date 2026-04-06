@@ -4,6 +4,8 @@ import { compareIsoDate, inferIsoDate, normalizeActivityLabel, normalizeName, no
 const DATE_PATTERN = /(\d{2}\/\d{2}(?:\/\d{2,4})?)/;
 const TIME_RANGE_PATTERN =
   /(?<start>\d{1,2}:\d{2})\s*(?:-|a|->|>|au|to)?\s*(?<end>\d{1,2}:\d{2})\s*(?<label>.*)$/i;
+const AGENT_HEADER_SUFFIX_PATTERN =
+  /\s+(?:Date\s*Debut\s*Fin\s*Activite(?:\s*planifiee)?\s*Debut\s*Fin|DateDebutFinActivite(?:\s*planifiee)?DebutFin|Date\s*Activite|DateDebutFin)\b.*$/i;
 
 function splitLogicalLines(input: string): string[] {
   const baseLines = normalizeWhitespace(input)
@@ -47,13 +49,27 @@ function ensureDay(agent: AgentSchedule, date: string): ParsedDay {
 
 function createAgent(raw: string): AgentSchedule {
   const match = raw.match(/^Agent\s*:\s*(?:(\d+)\s+)?(.+)$/i);
-  const displayName = normalizeText(match?.[2] ?? raw.replace(/^Agent\s*:/i, "").trim());
+  const displayName = sanitizeAgentName(match?.[2] ?? raw.replace(/^Agent\s*:/i, "").trim());
   return {
     agentId: match?.[1] ?? null,
     displayName,
     normalizedName: normalizeName(displayName),
     days: {}
   };
+}
+
+function sanitizeAgentName(rawName: string): string {
+  let value = normalizeText(rawName)
+    .replace(AGENT_HEADER_SUFFIX_PATTERN, "")
+    .replace(DATE_PATTERN, "")
+    .trim();
+
+  const commaNameMatch = value.match(/^([^,]+),\s*(.+)$/);
+  if (commaNameMatch) {
+    value = `${commaNameMatch[2]} ${commaNameMatch[1]}`.trim();
+  }
+
+  return normalizeText(value);
 }
 
 function extractActivityLabel(fallback: string, line: string, nextLine?: string): string {
@@ -189,4 +205,3 @@ export function parseNiceWfmText(
     }
   };
 }
-
