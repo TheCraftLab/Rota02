@@ -1,11 +1,14 @@
 import { useDeferredValue, useEffect, useState, useTransition } from "react";
 import {
+  getFrenchPublicHolidayLabel,
   DEFAULT_SETTINGS,
   normalizeName,
   summarizeRotation,
   toClipboardTable,
+  type AgentSchedule,
   type ParsedSchedule,
   type RotationCell,
+  type RotationCellRestoreState,
   type RotationResult,
   type RotationSettings
 } from "@rota/core";
@@ -37,6 +40,31 @@ function resolveAgentKey(agentId: string | null, agentName: string): string {
   return agentId ?? normalizeName(agentName);
 }
 
+function buildAgentListFromRotation(rotation: RotationResult | null): AgentSchedule[] {
+  if (!rotation) {
+    return [];
+  }
+
+  const byKey = new Map<string, AgentSchedule>();
+  for (const cell of rotation.cells) {
+    for (const candidate of cell.candidates) {
+      const key = resolveAgentKey(candidate.agentId, candidate.agentName);
+      if (byKey.has(key)) {
+        continue;
+      }
+
+      byKey.set(key, {
+        agentId: candidate.agentId,
+        displayName: candidate.agentName,
+        normalizedName: normalizeName(candidate.agentName),
+        days: {}
+      });
+    }
+  }
+
+  return [...byKey.values()].sort((left, right) => left.displayName.localeCompare(right.displayName, "fr"));
+}
+
 function getPathname(): string {
   return typeof window === "undefined" ? "/" : window.location.pathname || "/";
 }
@@ -55,6 +83,123 @@ function formatPublishedAt(value: string): string {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+const DISABLED_SLOT_NAME = "Creneau libere";
+
+function buildRestoreState(cell: RotationCell): RotationCellRestoreState {
+  return {
+    assignedAgentId: cell.assignedAgentId,
+    assignedAgentName: cell.assignedAgentName,
+    status: cell.status === "manual" || cell.status === "uncovered" ? cell.status : "assigned",
+    reasons: [...cell.reasons],
+    forcedManualOverride: cell.manualOverride?.forced ?? false,
+    originalAgentId: cell.manualOverride?.originalAgentId ?? cell.assignedAgentId,
+    originalAgentName: cell.manualOverride?.originalAgentName ?? cell.assignedAgentName
+  };
+}
+
+function restoreDisabledCell(cell: RotationCell): RotationCell {
+  const restoreState = cell.manualOverride?.restoreState;
+  const { manualOverride: _manualOverride, ...baseCell } = cell;
+  if (!restoreState) {
+    return {
+      ...baseCell,
+      assignedAgentId: null,
+      assignedAgentName: "Non couvert",
+      status: "uncovered",
+      reasons: ["Aucun agent ne couvre integralement ce creneau."]
+    };
+  }
+
+  if (restoreState.status === "manual") {
+    return {
+      ...baseCell,
+      assignedAgentId: restoreState.assignedAgentId,
+      assignedAgentName: restoreState.assignedAgentName,
+      status: restoreState.status,
+      reasons: [...restoreState.reasons],
+      manualOverride: {
+        forced: restoreState.forcedManualOverride,
+        originalAgentId: restoreState.originalAgentId,
+        originalAgentName: restoreState.originalAgentName
+      }
+    };
+  }
+
+  return {
+    ...baseCell,
+    assignedAgentId: restoreState.assignedAgentId,
+    assignedAgentName: restoreState.assignedAgentName,
+    status: restoreState.status,
+    reasons: [...restoreState.reasons]
+  };
+}
+
+function buildManualOverride(cell: RotationCell, forced: boolean): NonNullable<RotationCell["manualOverride"]> {
+  const { restoreState, ...currentOverride } = cell.manualOverride ?? {
+    forced,
+    originalAgentId: cell.assignedAgentId,
+    originalAgentName: cell.assignedAgentName
+  };
+
+  return {
+    ...currentOverride,
+    forced
+  };
+}
+
+function applyHolidayToCell(cell: RotationCell, holidayName: string): RotationCell {
+  return {
+    ...cell,
+    assignedAgentId: null,
+    assignedAgentName: "Ferie",
+    status: "holiday",
+    reasons: [`Jour ferie en France: ${holidayName}.`],
+    holidayOverride: {
+      holidayName,
+      cancelled: false,
+      restoreState: buildRestoreState(cell)
+    }
+  };
+}
+
+function restoreHolidayCell(cell: RotationCell): RotationCell {
+  const holidayOverride = cell.holidayOverride;
+  if (!holidayOverride) {
+    return cell;
+  }
+
+  const { holidayOverride: _holidayOverride, manualOverride: _manualOverride, ...baseCell } = cell;
+  const restored =
+    holidayOverride.restoreState.status === "manual"
+      ? {
+          ...baseCell,
+          assignedAgentId: holidayOverride.restoreState.assignedAgentId,
+          assignedAgentName: holidayOverride.restoreState.assignedAgentName,
+          status: holidayOverride.restoreState.status,
+          reasons: [...holidayOverride.restoreState.reasons],
+          manualOverride: {
+            forced: holidayOverride.restoreState.forcedManualOverride,
+            originalAgentId: holidayOverride.restoreState.originalAgentId,
+            originalAgentName: holidayOverride.restoreState.originalAgentName
+          }
+        }
+      : {
+          ...baseCell,
+          assignedAgentId: holidayOverride.restoreState.assignedAgentId,
+          assignedAgentName: holidayOverride.restoreState.assignedAgentName,
+          status: holidayOverride.restoreState.status,
+          reasons: [...holidayOverride.restoreState.reasons]
+        };
+
+  return {
+    ...restored,
+    holidayOverride: {
+      ...holidayOverride,
+      cancelled: true
+    }
+  };
 }
 
 interface RouteLinkProps {
@@ -99,6 +244,7 @@ export default function App() {
   const selectedCell =
     deferredRotation?.cells.find((cell) => cellKey(cell) === selectedCellKey) ?? null;
   const isAdminRoute = pathname.startsWith("/admin");
+  const currentAgents = parsedSchedule?.agents ?? buildAgentListFromRotation(rotation);
 
   useEffect(() => {
     const handlePopState = () => setPathname(getPathname());
@@ -167,6 +313,18 @@ export default function App() {
       cancelled = true;
     };
   }, [isAdminRoute]);
+
+  useEffect(() => {
+    if (!isAdminRoute || !adminAuthenticated || parsedSchedule || rotation || !published?.rotation) {
+      return;
+    }
+
+    startTransition(() => {
+      setRotation(published.rotation);
+      setSettings(published.rotation.settings);
+      setSelectedCellKey(published.rotation.cells[0] ? cellKey(published.rotation.cells[0]) : null);
+    });
+  }, [adminAuthenticated, isAdminRoute, parsedSchedule, published, rotation]);
 
   function handleAuthError(caughtError: unknown, fallback: string): string {
     if (caughtError instanceof Error && caughtError.name === "AuthError") {
@@ -295,8 +453,80 @@ export default function App() {
     }
   }
 
+  function handleToggleDisabled(cell: RotationCell) {
+    if (!rotation) {
+      return;
+    }
+
+    startTransition(() => {
+      const nextCells = rotation.cells.map((currentCell) => {
+        if (cellKey(currentCell) !== cellKey(cell)) {
+          return currentCell;
+        }
+
+        if (currentCell.status === "disabled") {
+          return restoreDisabledCell(currentCell);
+        }
+
+        return {
+          ...currentCell,
+          assignedAgentId: null,
+          assignedAgentName: DISABLED_SLOT_NAME,
+          status: "disabled" as const,
+          reasons: ["Creneau libere manuellement depuis l'administration."],
+          manualOverride: {
+            forced: currentCell.manualOverride?.forced ?? false,
+            originalAgentId: currentCell.manualOverride?.originalAgentId ?? currentCell.assignedAgentId,
+            originalAgentName: currentCell.manualOverride?.originalAgentName ?? currentCell.assignedAgentName,
+            restoreState: buildRestoreState(currentCell)
+          }
+        };
+      });
+
+      const nextSelectedKey = cell.status === "disabled" ? cellKey(cell) : null;
+      setSelectedCellKey(nextSelectedKey);
+      setRotation({
+        ...rotation,
+        cells: nextCells,
+        summary: summarizeRotation(nextCells, currentAgents)
+      });
+    });
+  }
+
+  function handleToggleHoliday(cell: RotationCell) {
+    if (!rotation) {
+      return;
+    }
+
+    const holidayName = cell.holidayOverride?.holidayName ?? getFrenchPublicHolidayLabel(cell.date);
+    if (!holidayName) {
+      return;
+    }
+
+    startTransition(() => {
+      const holidayActive = rotation.cells.some((currentCell) => currentCell.date === cell.date && currentCell.status === "holiday");
+      const nextCells = rotation.cells.map((currentCell) => {
+        if (currentCell.date !== cell.date) {
+          return currentCell;
+        }
+
+        if (holidayActive) {
+          return restoreHolidayCell(currentCell);
+        }
+
+        return applyHolidayToCell(currentCell, holidayName);
+      });
+
+      setRotation({
+        ...rotation,
+        cells: nextCells,
+        summary: summarizeRotation(nextCells, currentAgents)
+      });
+    });
+  }
+
   function handleManualAssign(cell: RotationCell, agentKey: string | null) {
-    if (!rotation || !parsedSchedule) {
+    if (!rotation) {
       return;
     }
 
@@ -313,17 +543,11 @@ export default function App() {
             assignedAgentName: "Non couvert",
             status: "manual" as const,
             reasons: ["Affectation manuelle: creneau laisse non couvert."],
-            manualOverride: currentCell.manualOverride
-              ? { ...currentCell.manualOverride, forced: false }
-              : {
-                  forced: false,
-                  originalAgentId: currentCell.assignedAgentId,
-                  originalAgentName: currentCell.assignedAgentName
-                }
+            manualOverride: buildManualOverride(currentCell, false)
           };
         }
 
-        const agent = parsedSchedule.agents.find(
+        const agent = (parsedSchedule?.agents ?? currentAgents).find(
           (item) => resolveAgentKey(item.agentId, item.displayName) === agentKey
         );
         const candidate = currentCell.candidates.find(
@@ -341,20 +565,14 @@ export default function App() {
               ? "Affectation manuelle forcee sur un agent non eligible selon les regles actuelles."
               : "Affectation manuelle realisee sur un agent eligible."
           ],
-          manualOverride: currentCell.manualOverride
-            ? { ...currentCell.manualOverride, forced }
-            : {
-                forced,
-                originalAgentId: currentCell.assignedAgentId,
-                originalAgentName: currentCell.assignedAgentName
-              }
+          manualOverride: buildManualOverride(currentCell, forced)
         };
       });
 
       setRotation({
         ...rotation,
         cells: nextCells,
-        summary: summarizeRotation(nextCells, parsedSchedule.agents)
+        summary: summarizeRotation(nextCells, currentAgents)
       });
     });
   }
@@ -539,13 +757,15 @@ export default function App() {
               rotation={deferredRotation}
               selectedCellKey={selectedCellKey}
               onSelectCell={(cell) => setSelectedCellKey(cellKey(cell))}
+              onToggleDisabled={handleToggleDisabled}
             />
             <SummaryPanel rotation={deferredRotation} />
             <InspectorDrawer
               cell={selectedCell}
-              agents={parsedSchedule?.agents ?? []}
+              agents={currentAgents}
               onClose={() => setSelectedCellKey(null)}
               onManualAssign={handleManualAssign}
+              onToggleHoliday={handleToggleHoliday}
             />
           </div>
         ) : (

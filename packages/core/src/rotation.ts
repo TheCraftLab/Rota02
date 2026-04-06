@@ -9,15 +9,7 @@ import type {
   RotationSummary,
   ParsedSchedule
 } from "./types";
-import {
-  average,
-  expandSlots,
-  formatDisplayDate,
-  minutesToTime,
-  normalizeName,
-  parseTimeToMinutes,
-  standardDeviation
-} from "./utils";
+import { average, buildRotationSlots, formatDisplayDate, getFrenchPublicHolidayLabel, normalizeName, standardDeviation } from "./utils";
 
 interface MutableCounter {
   total: number;
@@ -65,8 +57,9 @@ function compareCandidateReason(a: CandidateReason, b: CandidateReason): number 
 }
 
 export function summarizeRotation(cells: RotationCell[], agents: AgentSchedule[]): RotationSummary {
+  const activeCells = cells.filter((cell) => cell.status !== "disabled" && cell.status !== "holiday");
   const agentSummaries = agents.map((agent) => {
-    const assignedCells = cells.filter((cell) => cell.assignedAgentName === agent.displayName);
+    const assignedCells = activeCells.filter((cell) => cell.assignedAgentName === agent.displayName);
     const slotsByDate = assignedCells.reduce<Record<string, number>>((acc, cell) => {
       acc[cell.date] = (acc[cell.date] ?? 0) + 1;
       return acc;
@@ -91,7 +84,7 @@ export function summarizeRotation(cells: RotationCell[], agents: AgentSchedule[]
     overload: summary.totalSlots > threshold
   }));
 
-  const uncoveredSlots = cells.filter((cell) => cell.status === "uncovered").length;
+  const uncoveredSlots = activeCells.filter((cell) => cell.status === "uncovered").length;
   const fairnessScore = slotCounts.length
     ? Math.max(0, Math.round(100 - (deviation / Math.max(avg || 1, 1)) * 100))
     : 100;
@@ -106,7 +99,7 @@ export function summarizeRotation(cells: RotationCell[], agents: AgentSchedule[]
   return {
     agentSummaries: flagged,
     uncoveredSlots,
-    totalSlots: cells.length,
+    totalSlots: activeCells.length,
     fairnessScore,
     alerts
   };
@@ -121,7 +114,7 @@ export function generateRotation(
     ...inputSettings
   };
   const dates = parsedSchedule.dates;
-  const slotStarts = expandSlots(settings.startTime, settings.endTime, settings.slotMinutes);
+  const slots = buildRotationSlots(settings.startTime, settings.endTime, settings.slotMinutes);
   const counters = new Map<string, MutableCounter>();
   const cells: RotationCell[] = [];
 
@@ -129,9 +122,11 @@ export function generateRotation(
 
   for (const date of dates) {
     previousAgentId = null;
+    const holidayName = getFrenchPublicHolidayLabel(date);
 
-    for (const slotStart of slotStarts) {
-      const slotEnd = minutesToTime(parseTimeToMinutes(slotStart) + settings.slotMinutes);
+    for (const slot of slots) {
+      const slotStart = slot.start;
+      const slotEnd = slot.end;
 
       const candidates: CandidateReason[] = parsedSchedule.agents.map((agent) => {
         const eligibility = evaluateAgentEligibility(agent, date, slotStart, slotEnd, settings);
@@ -155,7 +150,7 @@ export function generateRotation(
       const selected = eligibleCandidates[0];
 
       if (!selected) {
-        cells.push({
+        const baseCell: RotationCell = {
           date,
           slotStart,
           slotEnd,
@@ -164,6 +159,74 @@ export function generateRotation(
           status: "uncovered",
           reasons: ["Aucun agent ne couvre integralement ce creneau."],
           candidates
+        };
+
+        if (holidayName) {
+          cells.push({
+            ...baseCell,
+            assignedAgentName: "Ferie",
+            status: "holiday",
+            reasons: [`Jour ferie en France: ${holidayName}.`],
+            holidayOverride: {
+              holidayName,
+              cancelled: false,
+              restoreState: {
+                assignedAgentId: baseCell.assignedAgentId,
+                assignedAgentName: baseCell.assignedAgentName,
+                status: "uncovered",
+                reasons: [...baseCell.reasons],
+                forcedManualOverride: false,
+                originalAgentId: null,
+                originalAgentName: "Non couvert"
+              }
+            }
+          });
+          previousAgentId = null;
+          continue;
+        }
+
+        cells.push(baseCell);
+        previousAgentId = null;
+        continue;
+      }
+
+      const baseCell: RotationCell = {
+        date,
+        slotStart,
+        slotEnd,
+        assignedAgentId: selected.agentId,
+        assignedAgentName: selected.agentName,
+        status: "assigned",
+        reasons: [
+          `${selected.agentName} est choisi car il a le moins de creneaux globaux.`,
+          `${selected.agentName} a ${selected.dayAssignedBefore} creneau(x) sur la journee avant affectation.`,
+          selected.previousSlotAssigned
+            ? "Aucune meilleure alternative n'evitait la repetition consecutive."
+            : "Une repetition consecutive a ete evitee."
+        ],
+        candidates
+      };
+
+      if (holidayName) {
+        cells.push({
+          ...baseCell,
+          assignedAgentId: null,
+          assignedAgentName: "Ferie",
+          status: "holiday",
+          reasons: [`Jour ferie en France: ${holidayName}.`],
+          holidayOverride: {
+            holidayName,
+            cancelled: false,
+            restoreState: {
+              assignedAgentId: baseCell.assignedAgentId,
+              assignedAgentName: baseCell.assignedAgentName,
+              status: "assigned",
+              reasons: [...baseCell.reasons],
+              forcedManualOverride: false,
+              originalAgentId: baseCell.assignedAgentId,
+              originalAgentName: baseCell.assignedAgentName
+            }
+          }
         });
         previousAgentId = null;
         continue;
@@ -180,22 +243,7 @@ export function generateRotation(
       }
 
       previousAgentId = selected.agentId ?? normalizeFallbackId(selected.agentName);
-      cells.push({
-        date,
-        slotStart,
-        slotEnd,
-        assignedAgentId: selected.agentId,
-        assignedAgentName: selected.agentName,
-        status: "assigned",
-        reasons: [
-          `${selected.agentName} est choisi car il a le moins de creneaux globaux.`,
-          `${selected.agentName} a ${selected.dayAssignedBefore} creneau(x) sur la journee avant affectation.`,
-          selected.previousSlotAssigned
-            ? "Aucune meilleure alternative n'evitait la repetition consecutive."
-            : "Une repetition consecutive a ete evitee."
-        ],
-        candidates
-      });
+      cells.push(baseCell);
     }
   }
 
@@ -209,7 +257,7 @@ export function generateRotation(
 
   return {
     dates,
-    slots: slotStarts,
+    slots: slots.map((slot) => slot.start),
     cells,
     summary: summarizeRotation(cells, parsedSchedule.agents),
     settings,

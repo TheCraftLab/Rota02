@@ -36,15 +36,13 @@ export function SettingsPanel({
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <label className="rounded-3xl bg-white/70 p-4">
-          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate/70">Debut</span>
-          <input
-            className="mt-3 w-full rounded-2xl border border-slate/15 bg-white px-3 py-3 text-sm text-ink outline-none ring-amber/30 transition focus:ring-4"
-            type="time"
-            value={settings.startTime}
-            onChange={(event) => onSettingsChange({ startTime: event.target.value })}
-          />
-        </label>
+        <div className="rounded-3xl bg-white/70 p-4">
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate/70">Premier creneau</span>
+          <div className="mt-3 rounded-2xl border border-slate/15 bg-white px-3 py-3">
+            <p className="text-sm font-semibold text-ink">08:30 - 10:00</p>
+            <p className="mt-1 text-xs text-slate">Creneau fixe applique automatiquement a chaque generation.</p>
+          </div>
+        </div>
         <label className="rounded-3xl bg-white/70 p-4">
           <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate/70">Fin</span>
           <input

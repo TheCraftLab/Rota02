@@ -5,6 +5,7 @@ interface RotationTableProps {
   rotation: RotationResult;
   selectedCellKey: string | null;
   onSelectCell?: (cell: RotationCell) => void;
+  onToggleDisabled?: (cell: RotationCell) => void;
   interactive?: boolean;
   title?: string;
   description?: string;
@@ -19,6 +20,7 @@ export function RotationTable({
   rotation,
   selectedCellKey,
   onSelectCell,
+  onToggleDisabled,
   interactive = true,
   title = "Rotation de chat editable",
   description = "Cliquez sur une cellule pour afficher les raisons de choix ou la modifier.",
@@ -26,6 +28,7 @@ export function RotationTable({
 }: RotationTableProps) {
   const isKiosk = density === "kiosk";
   const manualCount = rotation.cells.filter((cell) => cell.status === "manual").length;
+  const holidayCount = rotation.cells.filter((cell) => cell.status === "holiday").length;
 
   return (
     <section className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
@@ -35,11 +38,14 @@ export function RotationTable({
           <h2 className={`mt-2 font-semibold text-ink ${isKiosk ? "text-3xl sm:text-4xl" : "text-2xl"}`}>{title}</h2>
           <p className={`mt-2 text-slate ${isKiosk ? "text-base" : "text-sm"}`}>{description}</p>
         </div>
-        {manualCount > 0 ? (
+        {manualCount > 0 || holidayCount > 0 ? (
           <div className="flex flex-wrap gap-2">
-            <StatusBadge tone="warning">
-              {manualCount} modification(s) manuelle(s) en jaune
-            </StatusBadge>
+            {manualCount > 0 ? (
+              <StatusBadge tone="warning">
+                {manualCount} modification(s) manuelle(s) en jaune
+              </StatusBadge>
+            ) : null}
+            {holidayCount > 0 ? <StatusBadge tone="neutral">{holidayCount} creneau(x) ferie(s)</StatusBadge> : null}
           </div>
         ) : null}
       </div>
@@ -92,7 +98,11 @@ export function RotationTable({
 
                   const selected = selectedCellKey === cellKey(cell);
                   const tone =
-                    cell.status === "uncovered"
+                    cell.status === "holiday"
+                      ? "border-slate/20 bg-sand text-ink"
+                      : cell.status === "disabled"
+                      ? "border-slate/20 bg-slate/10 text-slate"
+                      : cell.status === "uncovered"
                       ? "border-coral/30 bg-coral/10 text-coral"
                       : cell.status === "manual"
                         ? "border-amber/40 bg-amber/25 text-amber"
@@ -104,17 +114,35 @@ export function RotationTable({
                       className={`min-w-[180px] border-b border-slate/10 px-3 align-top ${isKiosk ? "py-4" : "py-3"}`}
                     >
                       {interactive ? (
-                        <button
-                          type="button"
-                          title={cell.reasons.join(" ")}
-                          className={`w-full break-words rounded-2xl border px-4 text-left transition ${
+                        <div
+                          className={`relative w-full break-words rounded-2xl border transition ${
                             selected ? "border-ink shadow-lg" : "border-transparent"
-                          } ${tone} ${isKiosk ? "py-4" : "py-3"}`}
-                          onClick={() => onSelectCell?.(cell)}
+                          } ${tone}`}
                         >
-                          <div className={`font-semibold ${isKiosk ? "text-lg" : ""}`}>{cell.assignedAgentName}</div>
-                          <div className={`mt-1 opacity-80 ${isKiosk ? "text-sm" : "text-xs"}`}>{cell.slotStart} - {cell.slotEnd}</div>
-                        </button>
+                          {onToggleDisabled && cell.status !== "holiday" ? (
+                            <button
+                              type="button"
+                              className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/70 bg-white/90 text-sm font-semibold text-slate shadow-sm transition hover:bg-white"
+                              title={cell.status === "disabled" ? "Retablir ce creneau" : "Liberer ce creneau"}
+                              aria-label={cell.status === "disabled" ? "Retablir ce creneau" : "Liberer ce creneau"}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onToggleDisabled(cell);
+                              }}
+                            >
+                              {cell.status === "disabled" ? "+" : "x"}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            title={cell.reasons.join(" ")}
+                            className={`w-full text-left ${isKiosk ? "px-4 py-4 pr-12" : "px-4 py-3 pr-12"}`}
+                            onClick={() => onSelectCell?.(cell)}
+                          >
+                            <div className={`font-semibold ${isKiosk ? "text-lg" : ""}`}>{cell.assignedAgentName}</div>
+                            <div className={`mt-1 opacity-80 ${isKiosk ? "text-sm" : "text-xs"}`}>{cell.slotStart} - {cell.slotEnd}</div>
+                          </button>
+                        </div>
                       ) : (
                         <div className={`w-full break-words rounded-2xl border px-4 text-left ${tone} ${isKiosk ? "py-4" : "py-3"}`}>
                           <div className={`font-semibold ${isKiosk ? "text-lg" : ""}`}>{cell.assignedAgentName}</div>

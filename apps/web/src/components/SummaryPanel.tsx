@@ -6,6 +6,8 @@ interface SummaryPanelProps {
 }
 
 export function SummaryPanel({ rotation }: SummaryPanelProps) {
+  const holidaySlots = rotation.cells.filter((cell) => cell.status === "holiday").length;
+
   return (
     <section className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -18,6 +20,7 @@ export function SummaryPanel({ rotation }: SummaryPanelProps) {
           <StatusBadge tone={rotation.summary.uncoveredSlots > 0 ? "danger" : "neutral"}>
             {rotation.summary.uncoveredSlots} non couvert(s)
           </StatusBadge>
+          {holidaySlots > 0 ? <StatusBadge tone="neutral">{holidaySlots} creneau(x) ferie(s)</StatusBadge> : null}
         </div>
       </div>
 

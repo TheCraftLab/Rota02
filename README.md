@@ -115,7 +115,13 @@ Un agent n'est affecte que si une plage `Open Time` couvre l'integralite du cren
 
 ## Algorithme de rotation
 
-Pour chaque creneau entre `startTime` et `endTime`:
+Le premier creneau du matin est fixe:
+
+- `08:30 -> 10:00`
+
+Puis le reste de la journee suit la granularite choisie jusqu'a `endTime`.
+
+Pour chaque creneau:
 
 1. Lister les agents eligibles sur tout le creneau.
 2. Eliminer ceux qui ont une activite bloquante.
@@ -125,6 +131,8 @@ Pour chaque creneau entre `startTime` et `endTime`:
    - penalite de repetition consecutive si activee
    - ordre alphabetique stable en dernier recours
 4. S'il n'y a personne, le creneau devient `Non couvert`.
+5. Si la date est un jour ferie en France metropolitaine, toute la journee devient `Ferie`.
+   - l'admin peut annuler ou reappliquer le ferie sur la journee
 
 ## API
 
@@ -172,7 +180,7 @@ Corps JSON:
 {
   "parsedSchedule": {},
   "settings": {
-    "startTime": "09:00",
+    "startTime": "08:30",
     "endTime": "18:00",
     "slotMinutes": 60,
     "avoidConsecutive": true,
@@ -341,6 +349,7 @@ Parametres NPM conseilles:
 - Bind reseau: `0.0.0.0`
 - Admin protege par mot de passe via cookie de session HTTP-only
 - Rotation publiee persistante via `PUBLISHED_ROTATION_PATH`
+- Au retour sur `/admin`, la derniere rotation publiee est rechargee automatiquement pour reprise des modifications
 - Pas de validation d'host specifique cote application
 - Healthcheck Docker inclus
 - Service unique pour eviter les `502 Bad Gateway` lies a un mauvais port ou a plusieurs conteneurs a chainer

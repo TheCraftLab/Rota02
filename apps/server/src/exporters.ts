@@ -3,6 +3,10 @@ import type { RotationResult } from "@rota/core";
 import { formatDisplayDate } from "@rota/core";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
+function getCellExportLabel(value: RotationResult["cells"][number] | null | undefined): string {
+  return value?.assignedAgentName ?? "Non couvert";
+}
+
 export function buildRotationCsv(rotation: RotationResult): string {
   const headers = ["Heure", ...rotation.dates.map(formatDisplayDate)];
   const lines = [headers.join(";")];
@@ -11,7 +15,7 @@ export function buildRotationCsv(rotation: RotationResult): string {
     const row = [slot];
     for (const date of rotation.dates) {
       const cell = rotation.cells.find((item) => item.date === date && item.slotStart === slot);
-      row.push(escapeCsv(cell?.assignedAgentName ?? ""));
+      row.push(escapeCsv(getCellExportLabel(cell)));
     }
     lines.push(row.join(";"));
   }
@@ -44,7 +48,7 @@ export async function buildRotationWorkbook(rotation: RotationResult): Promise<B
     const row = [slot];
     for (const date of rotation.dates) {
       const cell = rotation.cells.find((item) => item.date === date && item.slotStart === slot);
-      row.push(cell?.assignedAgentName ?? "Non couvert");
+      row.push(getCellExportLabel(cell));
     }
     planningSheet.addRow(row);
   }
@@ -55,9 +59,44 @@ export async function buildRotationWorkbook(rotation: RotationResult): Promise<B
       return;
     }
 
-    row.eachCell((cell) => {
-      if (cell.value === "Non couvert") {
-        cell.fill = {
+    const slot = rotation.slots[rowNumber - 2];
+    row.eachCell((worksheetCell, columnNumber) => {
+      if (columnNumber === 1 || !slot) {
+        return;
+      }
+
+      const date = rotation.dates[columnNumber - 2];
+      const rotationCell = rotation.cells.find((item) => item.date === date && item.slotStart === slot);
+
+      if (rotationCell?.status === "disabled") {
+        worksheetCell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFE6EAF0" }
+        };
+        return;
+      }
+
+      if (rotationCell?.status === "holiday") {
+        worksheetCell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFF4E8C7" }
+        };
+        return;
+      }
+
+      if (rotationCell?.status === "manual") {
+        worksheetCell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFF9E3AE" }
+        };
+        return;
+      }
+
+      if (rotationCell?.status === "uncovered" || worksheetCell.value === "Non couvert") {
+        worksheetCell.fill = {
           type: "pattern",
           pattern: "solid",
           fgColor: { argb: "FFF2C9C9" }
@@ -269,7 +308,9 @@ function drawPdfTable(
       const cell = isTimeColumn
         ? null
         : rotation.cells.find((item) => item.date === column.key && item.slotStart === slot);
-      const value = isTimeColumn ? slot : cell?.assignedAgentName ?? "Non couvert";
+      const value = isTimeColumn ? slot : getCellExportLabel(cell);
+      const isDisabled = !isTimeColumn && cell?.status === "disabled";
+      const isHoliday = !isTimeColumn && cell?.status === "holiday";
       const isUncovered = !isTimeColumn && cell?.status === "uncovered";
       const isManual = !isTimeColumn && cell?.status === "manual";
 
@@ -280,6 +321,10 @@ function drawPdfTable(
         height: rowHeight,
         color: isTimeColumn
           ? rgb(1, 1, 1)
+          : isDisabled
+            ? rgb(0.92, 0.94, 0.97)
+          : isHoliday
+            ? rgb(0.96, 0.92, 0.82)
           : isUncovered
             ? rgb(0.99, 0.93, 0.93)
             : isManual

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../src/constants";
 import { evaluateAgentEligibility } from "../src/eligibility";
 import { parseNiceWfmText } from "../src/parser";
-import { generateRotation } from "../src/rotation";
+import { generateRotation, summarizeRotation } from "../src/rotation";
 
 const SAMPLE_INPUT = `
 Agent: 3109542 Assfeld, Isabel
@@ -146,7 +146,8 @@ describe("generateRotation", () => {
       .filter((cell) => cell.date === "2026-04-07")
       .map((cell) => cell.assignedAgentName);
 
-    expect(firstDayAssignments).toEqual(["Isabel ASSFELD", "Isabel ASSFELD", "Lea MARTIN", "Lea MARTIN"]);
+    expect(rotation.slots).toEqual(["08:30", "10:00", "11:00", "12:00"]);
+    expect(firstDayAssignments).toEqual(["Non couvert", "Isabel ASSFELD", "Lea MARTIN", "Lea MARTIN"]);
     expect(rotation.cells.map((cell) => cell.assignedAgentName)).toEqual(
       secondPass.cells.map((cell) => cell.assignedAgentName)
     );
@@ -162,5 +163,51 @@ describe("generateRotation", () => {
       })
     ).toBe(true);
     expect(rotation.summary.fairnessScore).toBeGreaterThan(0);
+  });
+
+  it("excludes manually liberated slots from summary totals", () => {
+    const parsed = parseNiceWfmText(SAMPLE_INPUT);
+    const rotation = generateRotation(parsed, {
+      ...DEFAULT_SETTINGS,
+      startTime: "09:00",
+      endTime: "11:00",
+      slotMinutes: 60
+    });
+
+    const firstCell = rotation.cells[0];
+    expect(firstCell).toBeDefined();
+
+    const nextCells = rotation.cells.map((cell, index) =>
+      index === 0
+        ? {
+            ...cell,
+            assignedAgentId: null,
+            assignedAgentName: "Creneau libere",
+            status: "disabled" as const,
+            reasons: ["Creneau libere manuellement depuis l'administration."]
+          }
+        : cell
+    );
+
+    const summary = summarizeRotation(nextCells, parsed.agents);
+
+    expect(summary.totalSlots).toBe(rotation.cells.length - 1);
+    expect(summary.uncoveredSlots).toBe(rotation.cells.filter((cell) => cell.status === "uncovered").length - 1);
+    expect(summary.agentSummaries.find((item) => item.agentName === "Isabel ASSFELD")?.totalSlots).toBe(1);
+  });
+
+  it("marks French public holidays across the whole day and excludes them from active totals", () => {
+    const parsed = parseNiceWfmText(`
+Agent: 3109542 Assfeld, Isabel
+01/05/2026
+08:30 18:00 Open Time
+`);
+
+    const rotation = generateRotation(parsed, DEFAULT_SETTINGS);
+
+    expect(rotation.cells.every((cell) => cell.status === "holiday")).toBe(true);
+    expect(rotation.cells.every((cell) => cell.assignedAgentName === "Ferie")).toBe(true);
+    expect(rotation.summary.totalSlots).toBe(0);
+    expect(rotation.summary.uncoveredSlots).toBe(0);
   });
 });

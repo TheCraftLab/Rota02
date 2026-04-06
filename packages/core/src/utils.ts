@@ -85,6 +85,94 @@ export function expandSlots(startTime: string, endTime: string, step: number): s
   return slots;
 }
 
+export interface RotationSlot {
+  start: string;
+  end: string;
+}
+
+export function buildRotationSlots(_startTime: string, endTime: string, step: number): RotationSlot[] {
+  const end = parseTimeToMinutes(endTime);
+  const slots: RotationSlot[] = [];
+  const specialStart = parseTimeToMinutes("08:30");
+  const specialEnd = parseTimeToMinutes("10:00");
+
+  if (end > specialStart) {
+    slots.push({
+      start: "08:30",
+      end: minutesToTime(Math.min(end, specialEnd))
+    });
+  }
+
+  for (let cursor = specialEnd; cursor < end; cursor += step) {
+    slots.push({
+      start: minutesToTime(cursor),
+      end: minutesToTime(Math.min(cursor + step, end))
+    });
+  }
+
+  return slots;
+}
+
+function computeEasterSunday(year: number): Date {
+  const century = Math.floor(year / 100);
+  const yearInCentury = year % 100;
+  const leapCorrection = Math.floor(century / 4);
+  const leapRemainder = century % 4;
+  const correction = Math.floor((century + 8) / 25);
+  const moonCorrection = Math.floor((century - correction + 1) / 3);
+  const moonPhase = (19 * yearInCentury + century - leapCorrection - moonCorrection + 15) % 30;
+  const yearLeap = Math.floor(yearInCentury / 4);
+  const yearRemainder = yearInCentury % 4;
+  const weekdayOffset = (32 + 2 * leapRemainder + 2 * yearLeap - moonPhase - yearRemainder) % 7;
+  const monthFactor = Math.floor((yearInCentury + 11 * moonPhase + 22 * weekdayOffset) / 451);
+  const month = Math.floor((moonPhase + weekdayOffset - 7 * monthFactor + 114) / 31);
+  const day = ((moonPhase + weekdayOffset - 7 * monthFactor + 114) % 31) + 1;
+
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function addUtcDays(date: Date, days: number): Date {
+  const copy = new Date(date);
+  copy.setUTCDate(copy.getUTCDate() + days);
+  return copy;
+}
+
+function toIsoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+export function getFrenchPublicHolidayLabel(isoDate: string): string | null {
+  const [yearPart] = isoDate.split("-");
+  const year = Number(yearPart);
+  if (!Number.isInteger(year)) {
+    return null;
+  }
+
+  const easterSunday = computeEasterSunday(year);
+  const mobileHolidays = new Map<string, string>([
+    [toIsoDate(addUtcDays(easterSunday, 1)), "Lundi de Paques"],
+    [toIsoDate(addUtcDays(easterSunday, 39)), "Ascension"],
+    [toIsoDate(addUtcDays(easterSunday, 50)), "Lundi de Pentecote"]
+  ]);
+
+  if (mobileHolidays.has(isoDate)) {
+    return mobileHolidays.get(isoDate) ?? null;
+  }
+
+  const fixedHolidays = new Map<string, string>([
+    [`${year}-01-01`, "Jour de l'an"],
+    [`${year}-05-01`, "Fete du Travail"],
+    [`${year}-05-08`, "Victoire 1945"],
+    [`${year}-07-14`, "Fete nationale"],
+    [`${year}-08-15`, "Assomption"],
+    [`${year}-11-01`, "Toussaint"],
+    [`${year}-11-11`, "Armistice"],
+    [`${year}-12-25`, "Noel"]
+  ]);
+
+  return fixedHolidays.get(isoDate) ?? null;
+}
+
 export function intersectRange(
   outerStart: string,
   outerEnd: string,

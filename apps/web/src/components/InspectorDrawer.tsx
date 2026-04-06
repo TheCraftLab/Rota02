@@ -6,20 +6,34 @@ interface InspectorDrawerProps {
   agents: AgentSchedule[];
   onClose: () => void;
   onManualAssign: (cell: RotationCell, agentKey: string | null) => void;
+  onToggleHoliday: (cell: RotationCell) => void;
 }
 
 function resolveAgentKey(agentId: string | null, agentName: string): string {
   return agentId ?? normalizeName(agentName);
 }
 
-export function InspectorDrawer({ cell, agents, onClose, onManualAssign }: InspectorDrawerProps) {
+export function InspectorDrawer({ cell, agents, onClose, onManualAssign, onToggleHoliday }: InspectorDrawerProps) {
   if (!cell) {
     return null;
   }
 
   const availableCandidates = cell.candidates.filter((candidate) => candidate.eligible);
+  const holidayManaged = cell.status === "holiday" || cell.holidayOverride?.cancelled;
   const currentValue =
-    cell.assignedAgentName === "Non couvert" ? "" : resolveAgentKey(cell.assignedAgentId, cell.assignedAgentName);
+    cell.status === "disabled" || cell.status === "holiday" || cell.assignedAgentName === "Non couvert"
+      ? ""
+      : resolveAgentKey(cell.assignedAgentId, cell.assignedAgentName);
+  const statusTone =
+    cell.status === "holiday"
+      ? "neutral"
+      : cell.status === "disabled"
+        ? "neutral"
+        : cell.status === "uncovered"
+          ? "danger"
+          : cell.status === "manual"
+            ? "warning"
+            : "success";
 
   return (
     <div
@@ -47,12 +61,41 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign }: Inspe
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <StatusBadge tone={cell.status === "uncovered" ? "danger" : cell.status === "manual" ? "warning" : "success"}>
+          <StatusBadge tone={statusTone}>
             {cell.assignedAgentName}
           </StatusBadge>
+          {cell.status === "holiday" ? <StatusBadge tone="neutral">Jour ferie</StatusBadge> : null}
+          {cell.holidayOverride?.holidayName ? (
+            <StatusBadge tone={cell.status === "holiday" ? "neutral" : "warning"}>
+              {cell.holidayOverride.holidayName}
+            </StatusBadge>
+          ) : null}
           {cell.status === "manual" ? <StatusBadge tone="warning">Modification manuelle</StatusBadge> : null}
+          {cell.status === "disabled" ? <StatusBadge tone="neutral">Creneau libere</StatusBadge> : null}
           {cell.manualOverride?.forced ? <StatusBadge tone="danger">Forcage hors eligibilite</StatusBadge> : null}
         </div>
+
+        {holidayManaged ? (
+          <div className="mt-6 rounded-3xl bg-white/70 p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-ink">Gestion du jour ferie</p>
+                <p className="mt-1 text-sm text-slate">
+                  {cell.status === "holiday"
+                    ? "Cette journee est actuellement marquee ferie sur tout le tableau."
+                    : "Le jour ferie a ete annule pour cette journee et peut etre reapplique si besoin."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-slate/15 bg-white px-5 py-3 text-sm font-semibold text-slate"
+                onClick={() => onToggleHoliday(cell)}
+              >
+                {cell.status === "holiday" ? "Annuler le ferie pour la journee" : "Reappliquer le ferie"}
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-6 rounded-3xl bg-white/70 p-4">
           <label className="block">
@@ -60,6 +103,7 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign }: Inspe
             <select
               className="mt-3 w-full rounded-2xl border border-slate/15 bg-white px-3 py-3 text-sm text-ink outline-none ring-amber/30 transition focus:ring-4"
               value={currentValue}
+              disabled={cell.status === "holiday"}
               onChange={(event) => onManualAssign(cell, event.target.value || null)}
             >
               <option value="">Non couvert</option>

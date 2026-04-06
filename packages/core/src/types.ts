@@ -56,19 +56,35 @@ export interface CandidateReason {
   notes: string[];
 }
 
+export interface RotationCellRestoreState {
+  assignedAgentId: string | null;
+  assignedAgentName: string;
+  status: "assigned" | "uncovered" | "manual";
+  reasons: string[];
+  forcedManualOverride: boolean;
+  originalAgentId: string | null;
+  originalAgentName: string;
+}
+
 export interface RotationCell {
   date: string;
   slotStart: string;
   slotEnd: string;
   assignedAgentId: string | null;
   assignedAgentName: string;
-  status: "assigned" | "uncovered" | "manual";
+  status: "assigned" | "uncovered" | "manual" | "disabled" | "holiday";
   reasons: string[];
   candidates: CandidateReason[];
   manualOverride?: {
     forced: boolean;
     originalAgentId: string | null;
     originalAgentName: string;
+    restoreState?: RotationCellRestoreState;
+  };
+  holidayOverride?: {
+    holidayName: string;
+    cancelled: boolean;
+    restoreState: RotationCellRestoreState;
   };
 }
 
