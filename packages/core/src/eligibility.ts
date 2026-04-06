@@ -1,6 +1,8 @@
-import { resolveActivityCategory } from "./catalog";
 import type { AgentSchedule, ParsedInterval, RotationSettings } from "./types";
+import { normalizeActivityLabel } from "./utils";
 import { intersectRange, rangeContains } from "./utils";
+
+const OPEN_TIME_ACTIVITY = "open time";
 
 export interface EligibilityResult {
   eligible: boolean;
@@ -28,8 +30,10 @@ export function evaluateAgentEligibility(
   }
 
   const blockingIntervals = day.intervals.filter((interval) => {
-    const category = resolveActivityCategory(interval.activity, settings);
-    return category === "ineligible" && intersectRange(interval.start, interval.end, slotStart, slotEnd);
+    return (
+      normalizeActivityLabel(interval.activity) !== OPEN_TIME_ACTIVITY &&
+      intersectRange(interval.start, interval.end, slotStart, slotEnd)
+    );
   });
 
   if (blockingIntervals.length) {
@@ -44,8 +48,10 @@ export function evaluateAgentEligibility(
   }
 
   const matchedEligibleIntervals = day.intervals.filter((interval) => {
-    const category = resolveActivityCategory(interval.activity, settings);
-    return category === "eligible" && rangeContains(interval.start, interval.end, slotStart, slotEnd);
+    return (
+      normalizeActivityLabel(interval.activity) === OPEN_TIME_ACTIVITY &&
+      rangeContains(interval.start, interval.end, slotStart, slotEnd)
+    );
   });
 
   if (!matchedEligibleIntervals.length) {
@@ -66,4 +72,3 @@ export function evaluateAgentEligibility(
     blockingIntervals: []
   };
 }
-

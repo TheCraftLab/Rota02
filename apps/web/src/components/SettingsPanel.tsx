@@ -1,36 +1,20 @@
-import type { ActivityCatalogEntry, RotationSettings } from "@rota/core";
+import type { RotationSettings } from "@rota/core";
 import { StatusBadge } from "./StatusBadge";
 
 interface SettingsPanelProps {
   settings: RotationSettings;
-  activities: ActivityCatalogEntry[];
   disabled: boolean;
   loading: boolean;
   onGenerate: () => Promise<void>;
   onSettingsChange: (patch: Partial<RotationSettings>) => void;
-  onActivityChange: (normalizedActivity: string, category: "eligible" | "ineligible" | "unknown") => void;
-}
-
-function getMode(settings: RotationSettings, normalizedActivity: string): "eligible" | "ineligible" | "unknown" {
-  if (settings.eligibleActivities.includes(normalizedActivity)) {
-    return "eligible";
-  }
-
-  if (settings.ineligibleActivities.includes(normalizedActivity)) {
-    return "ineligible";
-  }
-
-  return "unknown";
 }
 
 export function SettingsPanel({
   settings,
-  activities,
   disabled,
   loading,
   onGenerate,
-  onSettingsChange,
-  onActivityChange
+  onSettingsChange
 }: SettingsPanelProps) {
   return (
     <section className="panel-surface rounded-4xl border border-white/70 p-6 shadow-panel">
@@ -83,16 +67,7 @@ export function SettingsPanel({
         </label>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <label className="flex items-center gap-3 rounded-3xl bg-white/70 px-4 py-4">
-          <input
-            className="h-4 w-4 accent-amber"
-            type="checkbox"
-            checked={settings.allowAlternance}
-            onChange={(event) => onSettingsChange({ allowAlternance: event.target.checked })}
-          />
-          <span className="text-sm font-medium text-ink">Autoriser `Alternance Ecole/WH`</span>
-        </label>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <label className="flex items-center gap-3 rounded-3xl bg-white/70 px-4 py-4">
           <input
             className="h-4 w-4 accent-amber"
@@ -118,71 +93,9 @@ export function SettingsPanel({
         <div className="rounded-3xl bg-white/70 px-4 py-4">
           <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate/70">Etat</span>
           <div className="mt-3 flex flex-wrap gap-2">
-            <StatusBadge tone="success">{settings.eligibleActivities.length} eligibles</StatusBadge>
-            <StatusBadge tone="warning">{settings.ineligibleActivities.length} non eligibles</StatusBadge>
+            <StatusBadge tone="success">Open Time uniquement</StatusBadge>
+            <StatusBadge tone="warning">Tout le reste bloque</StatusBadge>
           </div>
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-ink">Catalogue d'activites</p>
-            <p className="text-sm text-slate">
-              Chaque activite peut etre forcee en eligible, non eligible, ou laissee neutre.
-            </p>
-          </div>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {activities.map((activity) => {
-            const mode = getMode(settings, activity.normalizedActivity);
-            const baseTone =
-              mode === "eligible" ? "border-mint/30 bg-mint/10" : mode === "ineligible" ? "border-coral/25 bg-coral/10" : "border-slate/15 bg-white/70";
-            return (
-              <div key={activity.normalizedActivity} className={`rounded-3xl border p-4 ${baseTone}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-ink">{activity.activity}</p>
-                    <p className="mt-1 text-xs text-slate">
-                      Detection initiale: <span className="font-semibold">{activity.category}</span>
-                    </p>
-                  </div>
-                  <StatusBadge tone={mode === "eligible" ? "success" : mode === "ineligible" ? "danger" : "neutral"}>
-                    {mode}
-                  </StatusBadge>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className={`rounded-full px-3 py-2 text-xs font-semibold ${
-                      mode === "eligible" ? "bg-mint text-white" : "bg-white text-slate"
-                    }`}
-                    onClick={() => onActivityChange(activity.normalizedActivity, "eligible")}
-                  >
-                    Eligible
-                  </button>
-                  <button
-                    type="button"
-                    className={`rounded-full px-3 py-2 text-xs font-semibold ${
-                      mode === "ineligible" ? "bg-coral text-white" : "bg-white text-slate"
-                    }`}
-                    onClick={() => onActivityChange(activity.normalizedActivity, "ineligible")}
-                  >
-                    Non eligible
-                  </button>
-                  <button
-                    type="button"
-                    className={`rounded-full px-3 py-2 text-xs font-semibold ${
-                      mode === "unknown" ? "bg-slate text-white" : "bg-white text-slate"
-                    }`}
-                    onClick={() => onActivityChange(activity.normalizedActivity, "unknown")}
-                  >
-                    Neutre
-                  </button>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
     </section>

@@ -16,15 +16,21 @@ body {
   min-height: 100vh;
   margin: 0;
   background: transparent;
+  overflow-x: hidden;
 }
 
 #root {
   min-height: 100vh;
+  overflow-x: clip;
 }
 
 .panel-surface {
   background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(16px);
+}
+
+.layout-safe {
+  min-width: 0;
 }
 
 .grid-table {
@@ -41,4 +47,3 @@ body {
   border-radius: 999px;
   background: rgba(62, 92, 118, 0.35);
 }
-

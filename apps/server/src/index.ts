@@ -4,7 +4,6 @@ import multer from "multer";
 import path from "node:path";
 import {
   DEFAULT_SETTINGS,
-  buildActivityCatalog,
   generateRotation,
   parseNiceWfmText,
   toClipboardTable,
@@ -58,14 +57,9 @@ app.post("/api/parse", upload.single("file"), async (request, response) => {
       request.file.mimetype,
       new Date()
     );
-    const activities = parsedSchedule.agents.flatMap((agent) =>
-      Object.values(agent.days).flatMap((day) => day.intervals.map((interval) => interval.activity))
-    );
-
     response.json({
       parsedSchedule,
-      settings: DEFAULT_SETTINGS,
-      detectedActivities: buildActivityCatalog(activities, DEFAULT_SETTINGS)
+      settings: DEFAULT_SETTINGS
     });
   } catch (error) {
     response.status(400).json({

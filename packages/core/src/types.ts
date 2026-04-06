@@ -1,5 +1,3 @@
-export type ActivityCategory = "eligible" | "ineligible" | "conditional" | "unknown";
-
 export interface ParsedInterval {
   start: string;
   end: string;
@@ -39,23 +37,12 @@ export interface ParsedSchedule {
   };
 }
 
-export interface ActivityRule {
-  label: string;
-  aliases: string[];
-  category: ActivityCategory;
-  configurable?: boolean;
-  description?: string;
-}
-
 export interface RotationSettings {
   startTime: string;
   endTime: string;
   slotMinutes: 30 | 60;
   avoidConsecutive: boolean;
   fairnessMode: "strict" | "soft";
-  allowAlternance: boolean;
-  eligibleActivities: string[];
-  ineligibleActivities: string[];
 }
 
 export interface CandidateReason {
@@ -109,11 +96,3 @@ export interface RotationResult {
   settings: RotationSettings;
   detectedActivities: string[];
 }
-
-export interface ActivityCatalogEntry {
-  activity: string;
-  normalizedActivity: string;
-  category: ActivityCategory;
-  configurable: boolean;
-}
-

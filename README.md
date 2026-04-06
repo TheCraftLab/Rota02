@@ -70,7 +70,6 @@ Application web de production pour importer un export NICE WFM, reconstruire la 
         +-- package.json
         +-- tsconfig.json
         +-- src
-        |   +-- catalog.ts
         |   +-- constants.ts
         |   +-- eligibility.ts
         |   +-- index.ts
@@ -111,13 +110,9 @@ Le parser gere:
 - `Conge paye`
 - `Brief`
 
-### Cas particulier
-
-- `Alternance Ecole/WH` est conditionnelle et devient eligible si l'option est activee
-
 ### Regle absolue
 
-Un agent n'est affecte que si au moins une activite eligible couvre l'integralite du creneau et qu'aucune activite non eligible ne recouvre le creneau.
+Un agent n'est affecte que si une plage `Open Time` couvre l'integralite du creneau. Toute autre activite est consideree comme non eligible et bloque le creneau si elle le recouvre.
 
 ## Algorithme de rotation
 
@@ -147,7 +142,6 @@ Retourne:
 
 - `parsedSchedule`
 - `settings`
-- `detectedActivities`
 
 ### `POST /api/generate`
 
@@ -161,10 +155,7 @@ Corps JSON:
     "endTime": "18:00",
     "slotMinutes": 60,
     "avoidConsecutive": true,
-    "fairnessMode": "strict",
-    "allowAlternance": false,
-    "eligibleActivities": ["open time"],
-    "ineligibleActivities": ["libre", "pause repas", "brief"]
+    "fairnessMode": "strict"
   }
 }
 ```
@@ -311,17 +302,17 @@ Parametres NPM conseilles:
 - Healthcheck Docker inclus
 - Service unique pour eviter les `502 Bad Gateway` lies a un mauvais port ou a plusieurs conteneurs a chainer
 
-## Modification des activites eligibles
+## Regle d'eligibilite
 
 Depuis l'interface:
 
-- chaque activite detectee peut etre basculee en `Eligible`, `Non eligible` ou `Neutre`
-- `Alternance Ecole/WH` dispose en plus d'un switch dedie
+- aucun catalogue d'activites n'est expose
+- le moteur considere uniquement `Open Time` comme eligible
+- toute autre activite reste non eligible
 
 Dans le code:
 
 - regles par defaut: `packages/core/src/constants.ts`
-- resolution des categories: `packages/core/src/catalog.ts`
 - verification d'eligibilite par creneau: `packages/core/src/eligibility.ts`
 
 ## Validation simple

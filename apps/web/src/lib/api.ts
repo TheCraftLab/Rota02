@@ -1,9 +1,8 @@
-import type { ActivityCatalogEntry, ParsedSchedule, RotationResult, RotationSettings } from "@rota/core";
+import type { ParsedSchedule, RotationResult, RotationSettings } from "@rota/core";
 
 interface ParseResponse {
   parsedSchedule: ParsedSchedule;
   settings: RotationSettings;
-  detectedActivities: ActivityCatalogEntry[];
 }
 
 export async function parseFile(file: File): Promise<ParseResponse> {

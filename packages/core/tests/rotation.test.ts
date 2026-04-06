@@ -43,7 +43,7 @@ describe("parseNiceWfmText", () => {
     expect(parsed.agents).toHaveLength(3);
     expect(parsed.dates).toEqual(["2026-04-07", "2026-04-08"]);
     expect(parsed.agents[0]?.days["2026-04-07"]?.intervals).toHaveLength(3);
-    expect(parsed.agents[0]?.displayName).toBe("Isabel Assfeld");
+    expect(parsed.agents[0]?.displayName).toBe("Isabel ASSFELD");
     expect(parsed.agents[2]?.days["2026-04-08"]?.intervals[0]?.activity).toBe("Open Time");
   });
 
@@ -52,14 +52,14 @@ describe("parseNiceWfmText", () => {
 
     expect(parsed.agents).toHaveLength(1);
     expect(parsed.agents[0]?.agentId).toBe("3010957");
-    expect(parsed.agents[0]?.displayName).toBe("Lucie Defougere");
+    expect(parsed.agents[0]?.displayName).toBe("Lucie DEFOUGERE");
   });
 });
 
 describe("evaluateAgentEligibility", () => {
   it("blocks a slot when a brief overlaps the slot", () => {
     const parsed = parseNiceWfmText(SAMPLE_INPUT);
-    const agent = parsed.agents.find((item) => item.displayName === "Isabel Assfeld");
+    const agent = parsed.agents.find((item) => item.displayName === "Isabel ASSFELD");
 
     expect(agent).toBeDefined();
 
@@ -68,22 +68,14 @@ describe("evaluateAgentEligibility", () => {
     expect(result.reasons[0]).toContain("Brief");
   });
 
-  it("treats alternance as eligible only when enabled", () => {
+  it("blocks any non-open-time activity", () => {
     const parsed = parseNiceWfmText(SAMPLE_INPUT);
-    const agent = parsed.agents.find((item) => item.displayName === "Marc Petit");
+    const agent = parsed.agents.find((item) => item.displayName === "Marc PETIT");
 
     expect(agent).toBeDefined();
 
     const blocked = evaluateAgentEligibility(agent!, "2026-04-07", "09:00", "10:00", DEFAULT_SETTINGS);
     expect(blocked.eligible).toBe(false);
-
-    const allowed = evaluateAgentEligibility(agent!, "2026-04-07", "09:00", "10:00", {
-      ...DEFAULT_SETTINGS,
-      allowAlternance: true,
-      eligibleActivities: [...DEFAULT_SETTINGS.eligibleActivities, "alternance ecole/wh"],
-      ineligibleActivities: DEFAULT_SETTINGS.ineligibleActivities.filter((activity) => activity !== "alternance ecole/wh")
-    });
-    expect(allowed.eligible).toBe(true);
   });
 });
 
@@ -94,10 +86,7 @@ describe("generateRotation", () => {
       ...DEFAULT_SETTINGS,
       startTime: "09:00",
       endTime: "13:00",
-      slotMinutes: 60,
-      allowAlternance: true,
-      eligibleActivities: [...DEFAULT_SETTINGS.eligibleActivities, "alternance ecole/wh"],
-      ineligibleActivities: DEFAULT_SETTINGS.ineligibleActivities.filter((activity) => activity !== "alternance ecole/wh")
+      slotMinutes: 60
     };
     const rotation = generateRotation(parsed, settings);
     const secondPass = generateRotation(parsed, settings);
@@ -106,7 +95,7 @@ describe("generateRotation", () => {
       .filter((cell) => cell.date === "2026-04-07")
       .map((cell) => cell.assignedAgentName);
 
-    expect(firstDayAssignments).toEqual(["Isabel Assfeld", "Marc Petit", "Lea Martin", "Marc Petit"]);
+    expect(firstDayAssignments).toEqual(["Isabel ASSFELD", "Isabel ASSFELD", "Lea MARTIN", "Lea MARTIN"]);
     expect(rotation.cells.map((cell) => cell.assignedAgentName)).toEqual(
       secondPass.cells.map((cell) => cell.assignedAgentName)
     );

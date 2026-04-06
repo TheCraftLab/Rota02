@@ -66,10 +66,44 @@ function sanitizeAgentName(rawName: string): string {
 
   const commaNameMatch = value.match(/^([^,]+),\s*(.+)$/);
   if (commaNameMatch) {
-    value = `${commaNameMatch[2]} ${commaNameMatch[1]}`.trim();
+    value = formatDisplayName(commaNameMatch[2] ?? "", commaNameMatch[1] ?? "");
+  } else {
+    value = formatDisplayNameFromFlatValue(value);
   }
 
   return normalizeText(value);
+}
+
+function formatDisplayName(firstNameRaw: string, lastNameRaw: string): string {
+  const firstName = toTitleCase(firstNameRaw);
+  const lastName = normalizeText(lastNameRaw).toUpperCase();
+  return `${firstName} ${lastName}`.trim();
+}
+
+function formatDisplayNameFromFlatValue(value: string): string {
+  const parts = normalizeText(value).split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) {
+    return toTitleCase(value);
+  }
+
+  const lastName = parts.pop() ?? "";
+  const firstName = parts.join(" ");
+  return formatDisplayName(firstName, lastName);
+}
+
+function toTitleCase(value: string): string {
+  return normalizeText(value)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) =>
+      part
+        .split("-")
+        .map((segment) =>
+          segment ? `${segment.charAt(0).toUpperCase()}${segment.slice(1).toLowerCase()}` : segment
+        )
+        .join("-")
+    )
+    .join(" ");
 }
 
 function extractActivityLabel(fallback: string, line: string, nextLine?: string): string {

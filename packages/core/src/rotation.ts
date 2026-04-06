@@ -1,4 +1,3 @@
-import { buildActivityCatalog } from "./catalog";
 import { DEFAULT_SETTINGS } from "./constants";
 import { evaluateAgentEligibility } from "./eligibility";
 import type {
@@ -200,12 +199,13 @@ export function generateRotation(
     }
   }
 
-  const detectedActivities = buildActivityCatalog(
-    parsedSchedule.agents.flatMap((agent) =>
-      Object.values(agent.days).flatMap((day) => day.intervals.map((interval) => interval.activity))
-    ),
-    settings
-  ).map((entry) => entry.activity);
+  const detectedActivities = [
+    ...new Set(
+      parsedSchedule.agents.flatMap((agent) =>
+        Object.values(agent.days).flatMap((day) => day.intervals.map((interval) => interval.activity))
+      )
+    )
+  ].sort((a, b) => a.localeCompare(b, "fr"));
 
   return {
     dates,

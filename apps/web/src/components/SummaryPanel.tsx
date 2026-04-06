@@ -7,7 +7,7 @@ interface SummaryPanelProps {
 
 export function SummaryPanel({ rotation }: SummaryPanelProps) {
   return (
-    <section className="panel-surface rounded-4xl border border-white/70 p-6 shadow-panel">
+    <section className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate/70">Controle</p>
@@ -21,11 +21,11 @@ export function SummaryPanel({ rotation }: SummaryPanelProps) {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-        <div className="rounded-3xl bg-white/70 p-4">
+      <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="layout-safe rounded-3xl bg-white/70 p-4">
           <p className="text-sm font-semibold text-ink">Repartition par agent</p>
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+          <div className="mt-4 max-w-full overflow-x-auto">
+            <table className="min-w-[640px] w-full text-left text-sm">
               <thead className="text-slate/70">
                 <tr>
                   <th className="pb-3 pr-4 font-semibold">Agent</th>
@@ -51,7 +51,7 @@ export function SummaryPanel({ rotation }: SummaryPanelProps) {
             </table>
           </div>
         </div>
-        <div className="rounded-3xl bg-white/70 p-4">
+        <div className="layout-safe rounded-3xl bg-white/70 p-4">
           <p className="text-sm font-semibold text-ink">Alertes</p>
           <div className="mt-4 flex flex-col gap-3">
             {rotation.summary.alerts.length ? (

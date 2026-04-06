@@ -12,7 +12,7 @@ function cellKey(cell: RotationCell): string {
 
 export function RotationTable({ rotation, selectedCellKey, onSelectCell }: RotationTableProps) {
   return (
-    <section className="panel-surface rounded-4xl border border-white/70 p-6 shadow-panel">
+    <section className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
       <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate/70">Tableau</p>
@@ -21,15 +21,15 @@ export function RotationTable({ rotation, selectedCellKey, onSelectCell }: Rotat
         </div>
       </div>
 
-      <div className="grid-table overflow-auto rounded-3xl border border-slate/10 bg-white/80">
-        <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
+      <div className="grid-table max-w-full overflow-x-auto overflow-y-auto rounded-3xl border border-slate/10 bg-white/80">
+        <table className="min-w-max w-full border-separate border-spacing-0 text-left text-sm">
           <thead className="sticky top-0 z-10 bg-sand">
             <tr>
-              <th className="sticky left-0 z-20 border-b border-r border-slate/10 bg-sand px-4 py-3 font-semibold text-ink">
+              <th className="sticky left-0 z-20 min-w-[88px] border-b border-r border-slate/10 bg-sand px-4 py-3 font-semibold text-ink">
                 Heure
               </th>
               {rotation.dates.map((date) => (
-                <th key={date} className="border-b border-slate/10 px-4 py-3 font-semibold text-ink">
+                <th key={date} className="min-w-[180px] border-b border-slate/10 px-4 py-3 font-semibold text-ink">
                   {formatDisplayDate(date)}
                 </th>
               ))}
@@ -38,7 +38,7 @@ export function RotationTable({ rotation, selectedCellKey, onSelectCell }: Rotat
           <tbody>
             {rotation.slots.map((slot) => (
               <tr key={slot}>
-                <td className="sticky left-0 border-b border-r border-slate/10 bg-white px-4 py-3 font-semibold text-slate">
+                <td className="sticky left-0 min-w-[88px] border-b border-r border-slate/10 bg-white px-4 py-3 font-semibold text-slate">
                   {slot}
                 </td>
                 {rotation.dates.map((date) => {
@@ -60,11 +60,11 @@ export function RotationTable({ rotation, selectedCellKey, onSelectCell }: Rotat
                         : "bg-mint/10 text-ink";
 
                   return (
-                    <td key={cellKey(cell)} className="border-b border-slate/10 px-3 py-3">
+                    <td key={cellKey(cell)} className="min-w-[180px] border-b border-slate/10 px-3 py-3 align-top">
                       <button
                         type="button"
                         title={cell.reasons.join(" ")}
-                        className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+                        className={`w-full break-words rounded-2xl border px-4 py-3 text-left transition ${
                           selected ? "border-ink shadow-lg" : "border-transparent"
                         } ${tone}`}
                         onClick={() => onSelectCell(cell)}
@@ -83,4 +83,3 @@ export function RotationTable({ rotation, selectedCellKey, onSelectCell }: Rotat
     </section>
   );
 }
-

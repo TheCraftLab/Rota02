@@ -1,11 +1,9 @@
 import { useDeferredValue, useState, useTransition } from "react";
 import {
   DEFAULT_SETTINGS,
-  normalizeActivityLabel,
   normalizeName,
   summarizeRotation,
   toClipboardTable,
-  type ActivityCatalogEntry,
   type ParsedSchedule,
   type RotationCell,
   type RotationResult,
@@ -30,7 +28,6 @@ function resolveAgentKey(agentId: string | null, agentName: string): string {
 
 export default function App() {
   const [parsedSchedule, setParsedSchedule] = useState<ParsedSchedule | null>(null);
-  const [activityCatalog, setActivityCatalog] = useState<ActivityCatalogEntry[]>([]);
   const [settings, setSettings] = useState<RotationSettings>(DEFAULT_SETTINGS);
   const [rotation, setRotation] = useState<RotationResult | null>(null);
   const [selectedCellKey, setSelectedCellKey] = useState<string | null>(null);
@@ -51,7 +48,6 @@ export default function App() {
       const response = await parseFile(file);
       startTransition(() => {
         setParsedSchedule(response.parsedSchedule);
-        setActivityCatalog(response.detectedActivities);
         setSettings(response.settings);
         setRotation(null);
         setSelectedCellKey(null);
@@ -64,47 +60,7 @@ export default function App() {
   }
 
   function updateSettings(patch: Partial<RotationSettings>) {
-    setSettings((current) => {
-      const next = { ...current, ...patch };
-      const alternanceKey = normalizeActivityLabel("Alternance Ecole/WH");
-
-      if (Object.prototype.hasOwnProperty.call(patch, "allowAlternance")) {
-        next.eligibleActivities = next.eligibleActivities.filter((activity) => activity !== alternanceKey);
-        next.ineligibleActivities = next.ineligibleActivities.filter((activity) => activity !== alternanceKey);
-
-        if (patch.allowAlternance) {
-          next.eligibleActivities = [...next.eligibleActivities, alternanceKey];
-        } else {
-          next.ineligibleActivities = [...next.ineligibleActivities, alternanceKey];
-        }
-      }
-
-      return next;
-    });
-  }
-
-  function updateActivityMode(normalizedActivity: string, category: "eligible" | "ineligible" | "unknown") {
-    setSettings((current) => {
-      const eligible = current.eligibleActivities.filter((activity) => activity !== normalizedActivity);
-      const ineligible = current.ineligibleActivities.filter((activity) => activity !== normalizedActivity);
-
-      if (category === "eligible") {
-        eligible.push(normalizedActivity);
-      }
-
-      if (category === "ineligible") {
-        ineligible.push(normalizedActivity);
-      }
-
-      const alternanceKey = normalizeActivityLabel("Alternance Ecole/WH");
-
-      return {
-        ...current,
-        allowAlternance: normalizedActivity === alternanceKey ? category === "eligible" : current.allowAlternance,
-        eligibleActivities: eligible,
-        ineligibleActivities: ineligible
-      };
-    });
+    setSettings((current) => ({ ...current, ...patch }));
   }
 
   async function handleGenerate() {
@@ -226,7 +182,7 @@ export default function App() {
   }
 
   return (
-    <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
+    <main className="mx-auto max-w-[1600px] overflow-x-clip px-4 py-8 sm:px-6 lg:px-8">
       <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.34em] text-slate/70">Atelier11.app - Rotation Chat</p>
@@ -234,7 +190,7 @@ export default function App() {
             Generez un planning de chat fiable a partir d'un export NICE WFM.
           </h1>
           <p className="mt-4 max-w-3xl text-base text-slate">
-            Le moteur reconstruit la disponibilite reelle, applique des regles metier configurables et produit une
+            Le moteur reconstruit la disponibilite reelle, applique une regle metier simple basee sur Open Time et produit une
             rotation equitable, exportable et retouchable.
           </p>
         </div>
@@ -255,12 +211,10 @@ export default function App() {
         <UploadCard parsedSchedule={parsedSchedule} loading={parseLoading} onFileSelected={handleFileSelected} />
         <SettingsPanel
           settings={settings}
-          activities={activityCatalog}
           disabled={!parsedSchedule}
           loading={generationLoading}
           onGenerate={handleGenerate}
           onSettingsChange={updateSettings}
-          onActivityChange={updateActivityMode}
         />
 
         {parsedSchedule?.warnings.length ? (
@@ -277,9 +231,9 @@ export default function App() {
         ) : null}
 
         {deferredRotation ? (
-          <div className="grid gap-6 xl:grid-cols-[1.5fr_0.9fr]">
-            <div className="grid gap-6">
-              <section className="panel-surface rounded-4xl border border-white/70 p-6 shadow-panel">
+          <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.5fr)_minmax(22rem,0.9fr)]">
+            <div className="layout-safe min-w-0 grid gap-6">
+              <section className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
@@ -322,12 +276,14 @@ export default function App() {
               />
               <SummaryPanel rotation={deferredRotation} />
             </div>
-            <InspectorDrawer
-              cell={selectedCell}
-              agents={parsedSchedule?.agents ?? []}
-              onClose={() => setSelectedCellKey(null)}
-              onManualAssign={handleManualAssign}
-            />
+            <div className="layout-safe min-w-0">
+              <InspectorDrawer
+                cell={selectedCell}
+                agents={parsedSchedule?.agents ?? []}
+                onClose={() => setSelectedCellKey(null)}
+                onManualAssign={handleManualAssign}
+              />
+            </div>
           </div>
         ) : (
           <section className="panel-surface rounded-4xl border border-white/70 p-10 text-center shadow-panel">

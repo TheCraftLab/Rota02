@@ -1,4 +1,3 @@
-export * from "./catalog";
 export * from "./constants";
 export * from "./eligibility";
 export * from "./parser";

@@ -15,7 +15,7 @@ function resolveAgentKey(agentId: string | null, agentName: string): string {
 export function InspectorDrawer({ cell, agents, onClose, onManualAssign }: InspectorDrawerProps) {
   if (!cell) {
     return (
-      <aside className="panel-surface rounded-4xl border border-white/70 p-6 shadow-panel">
+      <aside className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
         <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate/70">Inspection</p>
         <h2 className="mt-2 text-2xl font-semibold text-ink">Aucune cellule selectionnee</h2>
         <p className="mt-2 text-sm text-slate">
@@ -30,7 +30,7 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign }: Inspe
     cell.assignedAgentName === "Non couvert" ? "" : resolveAgentKey(cell.assignedAgentId, cell.assignedAgentName);
 
   return (
-    <aside className="panel-surface rounded-4xl border border-white/70 p-6 shadow-panel">
+    <aside className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel xl:sticky xl:top-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate/70">Inspection</p>
@@ -58,7 +58,7 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign }: Inspe
         <p className="text-sm font-semibold text-ink">Pourquoi ce choix ?</p>
         <div className="mt-3 flex flex-col gap-2">
           {cell.reasons.map((reason) => (
-            <div key={reason} className="rounded-2xl bg-sand px-4 py-3 text-sm text-slate">
+            <div key={reason} className="rounded-2xl bg-sand px-4 py-3 text-sm text-slate break-words">
               {reason}
             </div>
           ))}
@@ -100,7 +100,7 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign }: Inspe
           {cell.candidates.map((candidate) => (
             <div key={resolveAgentKey(candidate.agentId, candidate.agentName)} className="rounded-2xl border border-slate/10 px-4 py-3">
               <div className="flex items-center justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="font-semibold text-ink">{candidate.agentName}</p>
                   <p className="mt-1 text-xs text-slate">
                     Global: {candidate.totalAssignedBefore} - Jour: {candidate.dayAssignedBefore}
@@ -110,7 +110,7 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign }: Inspe
                   {candidate.eligible ? "Eligible" : "Bloque"}
                 </StatusBadge>
               </div>
-              <div className="mt-3 flex flex-col gap-2 text-sm text-slate">
+              <div className="mt-3 flex flex-col gap-2 break-words text-sm text-slate">
                 {candidate.notes.map((note) => (
                   <div key={note}>{note}</div>
                 ))}
