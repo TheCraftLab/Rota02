@@ -5,19 +5,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#11212D",
-        slate: "#3E5C76",
-        mist: "#E9F1F7",
-        sand: "#F4EDE4",
-        amber: "#E1A04A",
-        coral: "#D96C4F",
-        mint: "#6FA58B"
+        ink: "#0f1923",
+        slate: "#4a6278",
+        mist: "#eef2f6",
+        sand: "#f5f0ea",
+        amber: "#d4913c",
+        coral: "#c95e44",
+        mint: "#4e9070"
       },
       boxShadow: {
-        panel: "0 24px 60px -28px rgba(17, 33, 45, 0.32)"
+        panel: "0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)"
       },
       borderRadius: {
-        "4xl": "2rem"
+        "4xl": "1rem"
       }
     }
   },
@@ -25,4 +25,3 @@ const config: Config = {
 };
 
 export default config;
-

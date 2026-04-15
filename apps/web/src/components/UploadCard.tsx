@@ -22,12 +22,12 @@ export function UploadCard({ parsedSchedule, loading, onFileSelected }: UploadCa
   }
 
   return (
-    <section className="panel-surface rounded-4xl border border-white/70 p-6 shadow-panel">
+    <section className="panel-surface rounded-4xl border border-gray-100 p-6 shadow-panel">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate/70">Import NICE WFM</p>
-          <h2 className="mt-2 text-2xl font-semibold text-ink">Chargez un PDF ou un export texte</h2>
-          <p className="mt-2 max-w-2xl text-sm text-slate">
+          <p className="text-xs font-medium uppercase tracking-widest text-slate/50">Import NICE WFM</p>
+          <h2 className="mt-2 text-xl font-semibold text-ink">Chargez un PDF ou un export texte</h2>
+          <p className="mt-1.5 max-w-2xl text-sm text-slate">
             Le parser reconstruit les agents, les dates et les sous-creneaux, puis conserve la matiere brute
             pour regenerer la rotation sans reimport.
           </p>
@@ -36,8 +36,8 @@ export function UploadCard({ parsedSchedule, loading, onFileSelected }: UploadCa
       </div>
 
       <div
-        className={`rounded-3xl border-2 border-dashed p-8 transition ${
-          dragOver ? "border-amber bg-amber/10" : "border-slate/25 bg-white/50"
+        className={`rounded-xl border-2 border-dashed p-8 transition ${
+          dragOver ? "border-amber bg-amber/5" : "border-gray-200 bg-gray-50"
         }`}
         onDragEnter={(event) => {
           event.preventDefault();
@@ -68,15 +68,15 @@ export function UploadCard({ parsedSchedule, loading, onFileSelected }: UploadCa
         />
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-lg font-semibold text-ink">Glissez-deposez votre fichier d'horaires</p>
-            <p className="mt-2 text-sm text-slate">
-              Formats supportes: PDF, TXT, CSV, LOG. Taille recommandee: jusqu'a 10 Mo.
+            <p className="text-sm font-medium text-ink">Glissez-deposez votre fichier d'horaires</p>
+            <p className="mt-1 text-xs text-slate">
+              Formats supportes : PDF, TXT, CSV, LOG — jusqu'a 10 Mo.
             </p>
           </div>
           <button
             type="button"
             disabled={loading}
-            className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-white transition hover:bg-slate disabled:cursor-not-allowed disabled:opacity-60"
             onClick={() => inputRef.current?.click()}
           >
             {loading ? "Analyse en cours..." : "Importer un fichier"}
@@ -85,9 +85,9 @@ export function UploadCard({ parsedSchedule, loading, onFileSelected }: UploadCa
       </div>
 
       {parsedSchedule ? (
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <div className="rounded-3xl bg-white/70 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate/70">Agents detectes</p>
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-widest text-slate/50">Agents detectes</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {parsedSchedule.agents.map((agent) => (
                 <StatusBadge key={agent.normalizedName} tone="neutral">
@@ -96,8 +96,8 @@ export function UploadCard({ parsedSchedule, loading, onFileSelected }: UploadCa
               ))}
             </div>
           </div>
-          <div className="rounded-3xl bg-white/70 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate/70">Dates detectees</p>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-widest text-slate/50">Dates detectees</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {parsedSchedule.dates.map((date) => (
                 <StatusBadge key={date} tone="neutral">

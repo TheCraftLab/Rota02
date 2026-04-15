@@ -53,23 +53,23 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign, onToggl
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/35 px-4 py-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/25 px-4 py-6"
       onClick={onClose}
     >
       <div
-        className="panel-surface layout-safe max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-4xl border border-white/70 p-6 shadow-panel"
+        className="panel-surface layout-safe max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-4xl border border-gray-100 p-6 shadow-panel"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate/70">Modification du creneau</p>
-            <h2 className="mt-2 text-2xl font-semibold text-ink">
-              {cell.date} - {cell.slotStart}-{cell.slotEnd}
+            <p className="text-xs font-medium uppercase tracking-widest text-slate/50">Modification du creneau</p>
+            <h2 className="mt-2 text-xl font-semibold text-ink">
+              {cell.date} — {cell.slotStart}–{cell.slotEnd}
             </h2>
           </div>
           <button
             type="button"
-            className="rounded-full border border-slate/15 px-4 py-2 text-sm font-semibold text-slate"
+            className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-slate hover:bg-gray-50"
             onClick={onClose}
           >
             Fermer
@@ -92,42 +92,42 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign, onToggl
         </div>
 
         {holidayManaged ? (
-          <div className="mt-6 rounded-3xl bg-white/70 p-4">
+          <div className="mt-5 rounded-xl border border-gray-100 bg-gray-50 p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-sm font-semibold text-ink">Gestion du jour ferie</p>
+                <p className="text-sm font-medium text-ink">Gestion du jour ferie</p>
                 <p className="mt-1 text-sm text-slate">
                   {cell.status === "holiday"
                     ? "Cette journee est actuellement marquee ferie sur tout le tableau."
-                    : "Le jour ferie a ete annule pour cette journee et peut etre reapplique si besoin."}
+                    : "Le jour ferie a ete annule et peut etre reapplique si besoin."}
                 </p>
               </div>
               <button
                 type="button"
-                className="rounded-full border border-slate/15 bg-white px-5 py-3 text-sm font-semibold text-slate"
+                className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-slate hover:bg-gray-50"
                 onClick={() => onToggleHoliday(cell)}
               >
-                {cell.status === "holiday" ? "Annuler le ferie pour la journee" : "Reappliquer le ferie"}
+                {cell.status === "holiday" ? "Annuler le ferie" : "Reappliquer le ferie"}
               </button>
             </div>
           </div>
         ) : null}
 
-        <div className="mt-6 rounded-3xl bg-white/70 p-4">
+        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm font-semibold text-ink">Affectation rapide</p>
+              <p className="text-sm font-medium text-ink">Affectation rapide</p>
               <p className="mt-1 text-sm text-slate">
-                Clique directement sur un agent pour le remplacer sur ce creneau.
+                Cliquez sur un agent pour le remplacer sur ce creneau.
               </p>
             </div>
             <button
               type="button"
               disabled={assignmentLocked}
-              className={`rounded-full px-5 py-3 text-sm font-semibold transition ${
+              className={`rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                 currentValue === ""
-                  ? "bg-coral text-white"
-                  : "border border-slate/15 bg-white text-slate hover:bg-slate/5"
+                  ? "bg-coral text-white hover:bg-coral/90"
+                  : "border border-gray-200 bg-white text-slate hover:bg-gray-50"
               } disabled:cursor-not-allowed disabled:opacity-60`}
               onClick={() => onManualAssign(cell, null)}
             >
@@ -136,20 +136,20 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign, onToggl
           </div>
         </div>
 
-        <div className="mt-6 rounded-3xl bg-white/70 p-4">
-          <p className="text-sm font-semibold text-ink">Pourquoi ce choix ?</p>
+        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
+          <p className="text-sm font-medium text-ink">Pourquoi ce choix ?</p>
           <div className="mt-3 flex flex-col gap-2">
             {cell.reasons.map((reason) => (
-              <div key={reason} className="rounded-2xl bg-sand px-4 py-3 text-sm text-slate break-words">
+              <div key={reason} className="rounded-lg bg-sand px-4 py-3 text-sm text-slate break-words">
                 {reason}
               </div>
             ))}
           </div>
         </div>
 
-        <div className="mt-6 rounded-3xl bg-white/70 p-4">
-          <p className="text-sm font-semibold text-ink">Clique sur un agent pour le remplacer</p>
-          <div className="mt-3 flex flex-col gap-3">
+        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
+          <p className="text-sm font-medium text-ink">Agents disponibles</p>
+          <div className="mt-3 flex flex-col gap-2">
             {candidates.map((candidate) => {
               const candidateKey = resolveAgentKey(candidate.agentId, candidate.agentName);
               const selected = currentValue === candidateKey;
@@ -159,27 +159,27 @@ export function InspectorDrawer({ cell, agents, onClose, onManualAssign, onToggl
                   key={candidateKey}
                   type="button"
                   disabled={assignmentLocked}
-                  className={`rounded-2xl border px-4 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  className={`rounded-lg border px-4 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
                     selected
-                      ? "border-amber bg-amber/10 shadow-sm"
+                      ? "border-amber bg-amber/8"
                       : candidate.eligible
-                        ? "border-mint/30 bg-mint/5 hover:border-mint/50 hover:bg-mint/10"
-                        : "border-slate/10 bg-white hover:border-slate/20 hover:bg-slate/5"
+                        ? "border-mint/25 bg-mint/4 hover:border-mint/40 hover:bg-mint/8"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
                   }`}
                   onClick={() => onManualAssign(cell, candidateKey)}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-semibold text-ink">{candidate.agentName}</p>
-                      <p className="mt-1 text-xs text-slate">
-                        Global: {candidate.totalAssignedBefore} - Jour: {candidate.dayAssignedBefore}
+                      <p className="font-medium text-ink">{candidate.agentName}</p>
+                      <p className="mt-0.5 text-xs text-slate">
+                        Global : {candidate.totalAssignedBefore} — Jour : {candidate.dayAssignedBefore}
                       </p>
                     </div>
                     <StatusBadge tone={candidate.eligible ? "success" : "danger"}>
                       {candidate.eligible ? "Disponible" : "Bloque"}
                     </StatusBadge>
                   </div>
-                  <div className="mt-3 flex flex-col gap-2 break-words text-sm text-slate">
+                  <div className="mt-2 flex flex-col gap-1 break-words text-xs text-slate">
                     {candidate.notes.map((note) => (
                       <div key={note}>{note}</div>
                     ))}

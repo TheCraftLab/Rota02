@@ -1,3 +1,5 @@
+import { createServer } from "node:http";
+import { Server } from "socket.io";
 import cors from "cors";
 import express from "express";
 import multer from "multer";
@@ -18,6 +20,21 @@ import { extractTextFromUpload } from "./file-extractor";
 import { readPublishedRotation, writePublishedRotation } from "./published-store";
 
 const app = express();
+const httpServer = createServer(app);
+
+// Socket.io — compatible reverse proxy (Nginx Proxy Manager)
+// Dans NPM : activer "WebSocket Support" sur le proxy host.
+const io = new Server(httpServer, {
+  cors: { origin: true, credentials: true },
+  transports: ["websocket", "polling"],
+  allowUpgrades: true,
+  pingTimeout: 60000,
+  pingInterval: 25000
+});
+
+// Faire confiance au premier proxy (NPM) pour les headers X-Forwarded-*
+app.set("trust proxy", 1);
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -28,7 +45,8 @@ const upload = multer({
 app.disable("x-powered-by");
 app.use(
   cors({
-    origin: true
+    origin: true,
+    credentials: true
   })
 );
 app.use(express.json({ limit: config.apiJsonLimit }));
@@ -227,7 +245,10 @@ app.get("*", (request, response, next) => {
   });
 });
 
-app.listen(config.port, config.host, () => {
+// Utiliser httpServer (et non app.listen) pour que Socket.io intercepte les upgrades WebSocket
+httpServer.listen(config.port, config.host, () => {
   // eslint-disable-next-line no-console
   console.log(`Rota Chat Generator listening on http://${config.host}:${config.port}`);
 });
+
+export { io };
