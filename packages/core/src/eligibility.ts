@@ -3,6 +3,11 @@ import { normalizeActivityLabel } from "./utils";
 import { intersectRange, rangeContains } from "./utils";
 
 const OPEN_TIME_ACTIVITY = "open time";
+const PAID_SHORT_BREAK_PATTERN = /^petite pause remuneree\b/;
+
+function isNonBlockingActivity(normalizedActivity: string): boolean {
+  return normalizedActivity === OPEN_TIME_ACTIVITY || PAID_SHORT_BREAK_PATTERN.test(normalizedActivity);
+}
 
 export interface EligibilityResult {
   eligible: boolean;
@@ -30,10 +35,8 @@ export function evaluateAgentEligibility(
   }
 
   const blockingIntervals = day.intervals.filter((interval) => {
-    return (
-      normalizeActivityLabel(interval.activity) !== OPEN_TIME_ACTIVITY &&
-      intersectRange(interval.start, interval.end, slotStart, slotEnd)
-    );
+    const normalizedActivity = interval.normalizedActivity || normalizeActivityLabel(interval.activity);
+    return !isNonBlockingActivity(normalizedActivity) && intersectRange(interval.start, interval.end, slotStart, slotEnd);
   });
 
   if (blockingIntervals.length) {

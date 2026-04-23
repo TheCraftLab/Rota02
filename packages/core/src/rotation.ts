@@ -16,6 +16,73 @@ interface MutableCounter {
   byDate: Record<string, number>;
 }
 
+const NON_COVERED_NAME = "Non couvert";
+const HOLIDAY_NAME = "Ferie";
+const DISABLED_SLOT_NAME = "Creneau libere";
+
+function resolveAgentKey(agentId: string | null, agentName: string): string {
+  return agentId ?? normalizeName(agentName);
+}
+
+function isCountedAssignment(cell: RotationCell): boolean {
+  if (cell.status === "disabled" || cell.status === "holiday") {
+    return false;
+  }
+
+  return (
+    cell.assignedAgentName !== NON_COVERED_NAME &&
+    cell.assignedAgentName !== HOLIDAY_NAME &&
+    cell.assignedAgentName !== DISABLED_SLOT_NAME
+  );
+}
+
+function readCounter(counters: Map<string, MutableCounter>, key: string, date: string): [number, number] {
+  const counter = counters.get(key);
+  return [counter?.total ?? 0, counter?.byDate[date] ?? 0];
+}
+
+function incrementCounter(counters: Map<string, MutableCounter>, key: string, date: string): void {
+  const current = counters.get(key) ?? { total: 0, byDate: {} };
+  current.total += 1;
+  current.byDate[date] = (current.byDate[date] ?? 0) + 1;
+  counters.set(key, current);
+}
+
+function buildAssignmentCounters(cells: RotationCell[]): Map<string, MutableCounter> {
+  const counters = new Map<string, MutableCounter>();
+
+  for (const cell of cells) {
+    if (!isCountedAssignment(cell)) {
+      continue;
+    }
+
+    const key = resolveAgentKey(cell.assignedAgentId, cell.assignedAgentName);
+    incrementCounter(counters, key, cell.date);
+  }
+
+  return counters;
+}
+
+function buildRemovalReasons(
+  removedAgentName: string,
+  date: string,
+  replacementName: string,
+  globalBefore: number,
+  dayBefore: number
+): string[] {
+  return [
+    `Reaffectation automatique: ${removedAgentName} est retire(e) de la journee ${formatDisplayDate(date)}.`,
+    `${replacementName} est choisi car il a le moins de creneaux (${globalBefore} global, ${dayBefore} sur la journee).`
+  ];
+}
+
+function buildUncoveredReasons(removedAgentName: string, date: string): string[] {
+  return [
+    `Reaffectation automatique: ${removedAgentName} est retire(e) de la journee ${formatDisplayDate(date)}.`,
+    "Aucun autre agent eligible n'etait disponible pour ce creneau."
+  ];
+}
+
 function rankCandidate(
   agent: AgentSchedule,
   date: string,
@@ -102,6 +169,104 @@ export function summarizeRotation(cells: RotationCell[], agents: AgentSchedule[]
     totalSlots: activeCells.length,
     fairnessScore,
     alerts
+  };
+}
+
+export function removeAgentForDate(
+  rotation: RotationResult,
+  agents: AgentSchedule[],
+  date: string,
+  removedAgentKey: string
+): RotationResult {
+  if (!removedAgentKey || !rotation.dates.includes(date)) {
+    return rotation;
+  }
+
+  const slotRank = new Map(rotation.slots.map((slot, index) => [slot, index]));
+  const nextCells = [...rotation.cells];
+  const counters = buildAssignmentCounters(nextCells);
+  const removedAgentName =
+    agents.find((agent) => resolveAgentKey(agent.agentId, agent.displayName) === removedAgentKey)?.displayName ??
+    nextCells.find((cell) => resolveAgentKey(cell.assignedAgentId, cell.assignedAgentName) === removedAgentKey)
+      ?.assignedAgentName ??
+    "Agent retire";
+
+  const targetIndices = nextCells
+    .map((cell, index) => ({ cell, index }))
+    .filter(({ cell }) => {
+      if (cell.date !== date || cell.status === "disabled" || cell.status === "holiday") {
+        return false;
+      }
+      return resolveAgentKey(cell.assignedAgentId, cell.assignedAgentName) === removedAgentKey;
+    })
+    .sort((left, right) => (slotRank.get(left.cell.slotStart) ?? 0) - (slotRank.get(right.cell.slotStart) ?? 0))
+    .map((entry) => entry.index);
+
+  if (!targetIndices.length) {
+    return rotation;
+  }
+
+  for (const index of targetIndices) {
+    const currentCell = nextCells[index];
+    if (!currentCell) {
+      continue;
+    }
+
+    const eligibleReplacements = currentCell.candidates
+      .filter((candidate) => candidate.eligible)
+      .filter((candidate) => resolveAgentKey(candidate.agentId, candidate.agentName) !== removedAgentKey)
+      .sort((left, right) => {
+        const leftKey = resolveAgentKey(left.agentId, left.agentName);
+        const rightKey = resolveAgentKey(right.agentId, right.agentName);
+        const [leftTotal, leftDay] = readCounter(counters, leftKey, date);
+        const [rightTotal, rightDay] = readCounter(counters, rightKey, date);
+
+        if (leftTotal !== rightTotal) {
+          return leftTotal - rightTotal;
+        }
+
+        if (leftDay !== rightDay) {
+          return leftDay - rightDay;
+        }
+
+        return left.agentName.localeCompare(right.agentName, "fr");
+      });
+
+    const replacement = eligibleReplacements[0];
+    if (!replacement) {
+      const { manualOverride: _manualOverride, ...baseCell } = currentCell;
+      nextCells[index] = {
+        ...baseCell,
+        assignedAgentId: null,
+        assignedAgentName: NON_COVERED_NAME,
+        status: "uncovered",
+        reasons: buildUncoveredReasons(removedAgentName, date)
+      };
+      continue;
+    }
+
+    const replacementKey = resolveAgentKey(replacement.agentId, replacement.agentName);
+    const [globalBefore, dayBefore] = readCounter(counters, replacementKey, date);
+    incrementCounter(counters, replacementKey, date);
+
+    nextCells[index] = {
+      ...currentCell,
+      assignedAgentId: replacement.agentId,
+      assignedAgentName: replacement.agentName,
+      status: "manual",
+      reasons: buildRemovalReasons(removedAgentName, date, replacement.agentName, globalBefore, dayBefore),
+      manualOverride: {
+        forced: false,
+        originalAgentId: currentCell.manualOverride?.originalAgentId ?? currentCell.assignedAgentId,
+        originalAgentName: currentCell.manualOverride?.originalAgentName ?? currentCell.assignedAgentName
+      }
+    };
+  }
+
+  return {
+    ...rotation,
+    cells: nextCells,
+    summary: summarizeRotation(nextCells, agents)
   };
 }
 

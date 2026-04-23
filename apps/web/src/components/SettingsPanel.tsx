@@ -91,8 +91,9 @@ export function SettingsPanel({
         <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
           <span className="text-xs font-medium text-slate/60">Eligibilite</span>
           <div className="mt-2 flex flex-wrap gap-2">
-            <StatusBadge tone="success">Open Time uniquement</StatusBadge>
-            <StatusBadge tone="warning">Tout le reste bloque</StatusBadge>
+            <StatusBadge tone="success">Open Time requis</StatusBadge>
+            <StatusBadge tone="warning">Pause remuneree courte toleree</StatusBadge>
+            <StatusBadge tone="neutral">Autres activites bloquantes</StatusBadge>
           </div>
         </div>
       </div>

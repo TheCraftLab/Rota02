@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../src/constants";
 import { evaluateAgentEligibility } from "../src/eligibility";
 import { parseNiceWfmText } from "../src/parser";
-import { generateRotation, summarizeRotation } from "../src/rotation";
+import { generateRotation, removeAgentForDate, summarizeRotation } from "../src/rotation";
 
 const SAMPLE_INPUT = `
 Agent: 3109542 Assfeld, Isabel
@@ -61,6 +61,20 @@ Open Time13:3015:00
 Petite pause remuneree exclue15:0015:15
 Open Time15:1517:30
 10/04/26Libre
+`;
+
+const BALANCED_REMOVAL_INPUT = `
+Agent: 3109001 Alpha, Alice
+07/04/2026
+08:30 13:00 Open Time
+
+Agent: 3109002 Bravo, Bob
+07/04/2026
+08:30 13:00 Open Time
+
+Agent: 3109003 Charlie, Chloe
+07/04/2026
+08:30 13:00 Open Time
 `;
 
 describe("parseNiceWfmText", () => {
@@ -128,9 +142,33 @@ describe("evaluateAgentEligibility", () => {
     const blocked = evaluateAgentEligibility(agent!, "2026-04-07", "09:00", "10:00", DEFAULT_SETTINGS);
     expect(blocked.eligible).toBe(false);
   });
+
+  it("does not block paid short breaks", () => {
+    const parsed = parseNiceWfmText(SAMPLE_INPUT);
+    const agent = parsed.agents.find((item) => item.displayName === "Lea MARTIN");
+
+    expect(agent).toBeDefined();
+
+    const result = evaluateAgentEligibility(agent!, "2026-04-07", "10:00", "11:00", DEFAULT_SETTINGS);
+    expect(result.eligible).toBe(true);
+    expect(result.blockingIntervals).toHaveLength(0);
+  });
 });
 
 describe("generateRotation", () => {
+  it("uses exactly the dates detected in the import file", () => {
+    const parsed = parseNiceWfmText(SAMPLE_INPUT);
+    const rotation = generateRotation(parsed, {
+      ...DEFAULT_SETTINGS,
+      startTime: "09:00",
+      endTime: "11:00",
+      slotMinutes: 60
+    });
+
+    expect(rotation.dates).toEqual(parsed.dates);
+    expect([...new Set(rotation.cells.map((cell) => cell.date))]).toEqual(parsed.dates);
+  });
+
   it("creates a deterministic and balanced rotation", () => {
     const parsed = parseNiceWfmText(SAMPLE_INPUT);
     const settings = {
@@ -209,5 +247,32 @@ Agent: 3109542 Assfeld, Isabel
     expect(rotation.cells.every((cell) => cell.assignedAgentName === "Ferie")).toBe(true);
     expect(rotation.summary.totalSlots).toBe(0);
     expect(rotation.summary.uncoveredSlots).toBe(0);
+  });
+
+  it("reassigns a removed agent day to the least-loaded eligible agents", () => {
+    const parsed = parseNiceWfmText(BALANCED_REMOVAL_INPUT);
+    const rotation = generateRotation(parsed, {
+      ...DEFAULT_SETTINGS,
+      startTime: "08:30",
+      endTime: "13:00",
+      slotMinutes: 60
+    });
+    const alice = parsed.agents.find((agent) => agent.displayName === "Alice ALPHA");
+
+    expect(alice).toBeDefined();
+
+    const withoutAlice = removeAgentForDate(
+      rotation,
+      parsed.agents,
+      "2026-04-07",
+      alice!.agentId ?? alice!.normalizedName
+    );
+
+    const dayCells = withoutAlice.cells.filter((cell) => cell.date === "2026-04-07");
+    const assignments = dayCells.map((cell) => cell.assignedAgentName);
+
+    expect(assignments).toEqual(["Bob BRAVO", "Bob BRAVO", "Chloe CHARLIE", "Chloe CHARLIE"]);
+    expect(dayCells.every((cell) => cell.assignedAgentName !== "Alice ALPHA")).toBe(true);
+    expect(dayCells.filter((cell) => cell.status === "manual")).toHaveLength(2);
   });
 });

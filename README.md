@@ -105,19 +105,21 @@ Le parser gere:
 
 - `Libre`
 - `Pause repas`
-- `Petite pause remuneree exclue`
+- `Petite pause remuneree exclue` (n'est pas eligible mais ne bloque pas un creneau couvert par `Open Time`)
 - `Conge paye`
 - `Brief`
 
 ### Regle absolue
 
-Un agent n'est affecte que si une plage `Open Time` couvre l'integralite du creneau. Toute autre activite est consideree comme non eligible et bloque le creneau si elle le recouvre.
+Un agent n'est affecte que si une plage `Open Time` couvre l'integralite du creneau. Toute autre activite est consideree comme non eligible et bloque le creneau si elle le recouvre, sauf `Petite pause remuneree exclue`.
 
 ## Algorithme de rotation
 
 Le premier creneau du matin est fixe:
 
 - `08:30 -> 10:00`
+
+La rotation est generee uniquement sur les dates detectees dans le fichier importe.
 
 Puis le reste de la journee suit la granularite choisie jusqu'a `endTime`.
 
@@ -359,8 +361,9 @@ Parametres NPM conseilles:
 Depuis l'interface:
 
 - aucun catalogue d'activites n'est expose
-- le moteur considere uniquement `Open Time` comme eligible
-- toute autre activite reste non eligible
+- le moteur considere `Open Time` comme base d'eligibilite
+- `Petite pause remuneree exclue` reste non eligible mais n'est pas bloquante
+- les autres activites non eligibles restent bloquantes
 
 Dans le code:
 
@@ -375,13 +378,14 @@ Dans le code:
 4. Verifier que le tableau affiche le jour de semaine dans les colonnes.
 5. Cliquer sur quelques cellules pour verifier la justification et les candidats bloques.
 6. Modifier une cellule manuellement et verifier que le resume change.
-7. Publier la rotation sur l'index.
-8. Verifier la page publique `/`.
-9. Exporter en CSV, XLSX puis PDF.
-10. Verifier `GET /api/health`.
-11. Verifier le statut `healthy` du conteneur.
-12. Configurer NPM vers `http://IP_LAN_DU_RASPBERRY_PI:8088`.
-13. Tester l'acces en LAN puis via le domaine.
+7. Utiliser "Retirer un agent sur une journee" et verifier la redistribution automatique.
+8. Publier la rotation sur l'index.
+9. Verifier la page publique `/`.
+10. Exporter en CSV, XLSX puis PDF.
+11. Verifier `GET /api/health`.
+12. Verifier le statut `healthy` du conteneur.
+13. Configurer NPM vers `http://IP_LAN_DU_RASPBERRY_PI:8088`.
+14. Tester l'acces en LAN puis via le domaine.
 
 ## Procedure de validation avant mise en production
 

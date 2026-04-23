@@ -1,8 +1,10 @@
-import { useDeferredValue, useEffect, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import {
   getFrenchPublicHolidayLabel,
+  formatDisplayDate,
   DEFAULT_SETTINGS,
   normalizeName,
+  removeAgentForDate,
   summarizeRotation,
   toClipboardTable,
   type AgentSchedule,
@@ -60,6 +62,40 @@ function buildAgentListFromRotation(rotation: RotationResult | null): AgentSched
         days: {}
       });
     }
+  }
+
+  return [...byKey.values()].sort((left, right) => left.displayName.localeCompare(right.displayName, "fr"));
+}
+
+interface DateAgentOption {
+  key: string;
+  displayName: string;
+  slots: number;
+}
+
+function collectAssignedAgentsForDate(rotation: RotationResult, date: string): DateAgentOption[] {
+  const byKey = new Map<string, DateAgentOption>();
+
+  for (const cell of rotation.cells) {
+    if (cell.date !== date) {
+      continue;
+    }
+    if (cell.status === "disabled" || cell.status === "holiday" || cell.assignedAgentName === "Non couvert") {
+      continue;
+    }
+
+    const key = resolveAgentKey(cell.assignedAgentId, cell.assignedAgentName);
+    const current = byKey.get(key);
+    if (current) {
+      current.slots += 1;
+      continue;
+    }
+
+    byKey.set(key, {
+      key,
+      displayName: cell.assignedAgentName,
+      slots: 1
+    });
   }
 
   return [...byKey.values()].sort((left, right) => left.displayName.localeCompare(right.displayName, "fr"));
@@ -235,6 +271,8 @@ export default function App() {
   const [adminChecking, setAdminChecking] = useState(true);
   const [adminLoginLoading, setAdminLoginLoading] = useState(false);
   const [selectedCellKey, setSelectedCellKey] = useState<string | null>(null);
+  const [removedAgentDate, setRemovedAgentDate] = useState<string>("");
+  const [removedAgentKey, setRemovedAgentKey] = useState<string>("");
   const [parseLoading, setParseLoading] = useState(false);
   const [generationLoading, setGenerationLoading] = useState(false);
   const [publicLoading, setPublicLoading] = useState(true);
@@ -247,6 +285,13 @@ export default function App() {
     deferredRotation?.cells.find((cell) => cellKey(cell) === selectedCellKey) ?? null;
   const isAdminRoute = pathname.startsWith("/admin");
   const currentAgents = parsedSchedule?.agents ?? buildAgentListFromRotation(rotation);
+  const removableAgents = useMemo(() => {
+    if (!deferredRotation || !removedAgentDate) {
+      return [];
+    }
+
+    return collectAssignedAgentsForDate(deferredRotation, removedAgentDate);
+  }, [deferredRotation, removedAgentDate]);
 
   useEffect(() => {
     const handlePopState = () => setPathname(getPathname());
@@ -327,6 +372,20 @@ export default function App() {
       setSelectedCellKey(published.rotation.cells[0] ? cellKey(published.rotation.cells[0]) : null);
     });
   }, [adminAuthenticated, isAdminRoute, parsedSchedule, published, rotation]);
+
+  useEffect(() => {
+    if (!deferredRotation) {
+      setRemovedAgentDate("");
+      return;
+    }
+
+    const firstDate = deferredRotation.dates[0] ?? "";
+    setRemovedAgentDate((current) => (deferredRotation.dates.includes(current) ? current : firstDate));
+  }, [deferredRotation]);
+
+  useEffect(() => {
+    setRemovedAgentKey((current) => (removableAgents.some((option) => option.key === current) ? current : removableAgents[0]?.key ?? ""));
+  }, [removableAgents]);
 
   function handleAuthError(caughtError: unknown, fallback: string): string {
     if (caughtError instanceof Error && caughtError.name === "AuthError") {
@@ -579,6 +638,29 @@ export default function App() {
     });
   }
 
+  function handleRemoveAgentFromDate() {
+    if (!rotation || !removedAgentDate || !removedAgentKey) {
+      return;
+    }
+
+    startTransition(() => {
+      const nextRotation = removeAgentForDate(rotation, currentAgents, removedAgentDate, removedAgentKey);
+      setRotation(nextRotation);
+      setSelectedCellKey((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const selectedCell = nextRotation.cells.find((cell) => cellKey(cell) === current);
+        if (!selectedCell) {
+          return null;
+        }
+
+        return selectedCell.assignedAgentId || selectedCell.assignedAgentName !== "Non couvert" ? current : null;
+      });
+    });
+  }
+
   if (!isAdminRoute) {
     return (
       <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
@@ -753,6 +835,55 @@ export default function App() {
                   >
                     {exportLoading === "copy" ? "Copie..." : "Copier le tableau"}
                   </button>
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-sm font-semibold text-ink">Retirer un agent sur une journee</p>
+                  <p className="mt-1 text-xs text-slate">
+                    Les creneaux de l'agent retire sont reassignes automatiquement vers les agents eligibles les moins charges.
+                  </p>
+
+                  <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto]">
+                    <label className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                      <span className="text-xs font-medium text-slate/70">Date</span>
+                      <select
+                        className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-ink outline-none ring-amber/30 transition focus:border-amber/60 focus:ring-4"
+                        value={removedAgentDate}
+                        onChange={(event) => setRemovedAgentDate(event.target.value)}
+                      >
+                        {deferredRotation.dates.map((date) => (
+                          <option key={date} value={date}>
+                            {formatDisplayDate(date)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                      <span className="text-xs font-medium text-slate/70">Agent</span>
+                      <select
+                        className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-ink outline-none ring-amber/30 transition focus:border-amber/60 focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60"
+                        value={removedAgentKey}
+                        onChange={(event) => setRemovedAgentKey(event.target.value)}
+                        disabled={!removedAgentDate || !removableAgents.length}
+                      >
+                        {removableAgents.map((agent) => (
+                          <option key={agent.key} value={agent.key}>
+                            {agent.displayName} ({agent.slots} creneau{agent.slots > 1 ? "x" : ""})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <button
+                      type="button"
+                      className="self-end rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-slate transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={handleRemoveAgentFromDate}
+                      disabled={!removedAgentDate || !removedAgentKey}
+                    >
+                      Retirer cet agent
+                    </button>
+                  </div>
                 </div>
               </section>
               <RotationTable
