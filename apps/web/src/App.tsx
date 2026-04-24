@@ -1,13 +1,16 @@
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import {
+  compareIsoDate,
   getFrenchPublicHolidayLabel,
   formatDisplayDate,
   DEFAULT_SETTINGS,
   normalizeName,
+  parseTimeToMinutes,
   removeAgentForDate,
   summarizeRotation,
   toClipboardTable,
   type AgentSchedule,
+  type ParseWarning,
   type ParsedSchedule,
   type RotationCell,
   type RotationCellRestoreState,
@@ -119,6 +122,227 @@ function formatPublishedAt(value: string): string {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function getTodayIsoDate(now = new Date()): string {
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, "0");
+  const day = `${now.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function cloneWarnings(warnings: ParseWarning[]): ParseWarning[] {
+  return warnings.map((warning) => ({ ...warning }));
+}
+
+function cloneAgent(agent: AgentSchedule): AgentSchedule {
+  return {
+    ...agent,
+    days: Object.fromEntries(
+      Object.entries(agent.days).map(([date, day]) => [
+        date,
+        {
+          ...day,
+          intervals: day.intervals.map((interval) => ({ ...interval })),
+          issues: [...day.issues]
+        }
+      ])
+    )
+  };
+}
+
+function pruneParsedSchedulePastDates(parsed: ParsedSchedule, referenceDate: string): ParsedSchedule {
+  const filteredAgents = parsed.agents
+    .map((agent) => {
+      const days = Object.fromEntries(
+        Object.entries(agent.days)
+          .filter(([date]) => date >= referenceDate)
+          .map(([date, day]) => [
+            date,
+            {
+              ...day,
+              intervals: day.intervals.map((interval) => ({ ...interval })),
+              issues: [...day.issues]
+            }
+          ])
+      );
+
+      return {
+        ...agent,
+        days
+      };
+    })
+    .filter((agent) => Object.keys(agent.days).length > 0);
+
+  const dateSet = new Set(parsed.dates.filter((date) => date >= referenceDate));
+  for (const agent of filteredAgents) {
+    for (const date of Object.keys(agent.days)) {
+      dateSet.add(date);
+    }
+  }
+
+  return {
+    ...parsed,
+    agents: filteredAgents,
+    dates: [...dateSet].sort(compareIsoDate),
+    warnings: cloneWarnings(parsed.warnings)
+  };
+}
+
+function mergeWarnings(left: ParseWarning[], right: ParseWarning[]): ParseWarning[] {
+  const seen = new Set<string>();
+  const merged: ParseWarning[] = [];
+
+  for (const warning of [...left, ...right]) {
+    const key = `${warning.scope}|${warning.agentName ?? ""}|${warning.date ?? ""}|${warning.message}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    merged.push({ ...warning });
+  }
+
+  return merged;
+}
+
+function mergeParsedSchedules(
+  existing: ParsedSchedule | null,
+  incoming: ParsedSchedule,
+  referenceDate: string
+): ParsedSchedule {
+  const nextIncoming = pruneParsedSchedulePastDates(incoming, referenceDate);
+  if (!existing) {
+    return nextIncoming;
+  }
+
+  const nextExisting = pruneParsedSchedulePastDates(existing, referenceDate);
+  const byKey = new Map<string, AgentSchedule>();
+
+  for (const agent of nextExisting.agents) {
+    const key = resolveAgentKey(agent.agentId, agent.displayName);
+    byKey.set(key, cloneAgent(agent));
+  }
+
+  for (const agent of nextIncoming.agents) {
+    const key = resolveAgentKey(agent.agentId, agent.displayName);
+    const current = byKey.get(key);
+    if (!current) {
+      byKey.set(key, cloneAgent(agent));
+      continue;
+    }
+
+    const mergedDays = { ...current.days };
+    for (const [date, day] of Object.entries(agent.days)) {
+      mergedDays[date] = {
+        ...day,
+        intervals: day.intervals.map((interval) => ({ ...interval })),
+        issues: [...day.issues]
+      };
+    }
+
+    byKey.set(key, {
+      ...current,
+      agentId: agent.agentId ?? current.agentId,
+      displayName: agent.displayName || current.displayName,
+      normalizedName: agent.normalizedName || current.normalizedName,
+      days: mergedDays
+    });
+  }
+
+  const mergedAgents = [...byKey.values()]
+    .filter((agent) => Object.keys(agent.days).length > 0)
+    .sort((left, right) => left.displayName.localeCompare(right.displayName, "fr"));
+  const dateSet = new Set<string>();
+  for (const date of [...nextExisting.dates, ...nextIncoming.dates]) {
+    if (date >= referenceDate) {
+      dateSet.add(date);
+    }
+  }
+  for (const agent of mergedAgents) {
+    for (const date of Object.keys(agent.days)) {
+      if (date >= referenceDate) {
+        dateSet.add(date);
+      }
+    }
+  }
+
+  return {
+    ...nextIncoming,
+    agents: mergedAgents,
+    dates: [...dateSet].sort(compareIsoDate),
+    warnings: mergeWarnings(nextExisting.warnings, nextIncoming.warnings)
+  };
+}
+
+function pruneRotationPastDates(rotation: RotationResult, referenceDate: string): RotationResult {
+  const nextDates = rotation.dates.filter((date) => date >= referenceDate).sort(compareIsoDate);
+  const allowedDates = new Set(nextDates);
+  const nextCells = rotation.cells.filter((cell) => allowedDates.has(cell.date));
+
+  if (nextDates.length === rotation.dates.length && nextCells.length === rotation.cells.length) {
+    return rotation;
+  }
+
+  const nextRotation: RotationResult = {
+    ...rotation,
+    dates: nextDates,
+    cells: nextCells
+  };
+
+  return {
+    ...nextRotation,
+    summary: summarizeRotation(nextCells, buildAgentListFromRotation(nextRotation))
+  };
+}
+
+function mergeRotations(
+  existing: RotationResult | null,
+  incoming: RotationResult,
+  referenceDate: string
+): RotationResult {
+  const nextIncoming = pruneRotationPastDates(incoming, referenceDate);
+  if (!existing) {
+    return nextIncoming;
+  }
+
+  const nextExisting = pruneRotationPastDates(existing, referenceDate);
+  const dates = [...new Set([...nextExisting.dates, ...nextIncoming.dates])].sort(compareIsoDate);
+  const slots = [...new Set([...nextExisting.slots, ...nextIncoming.slots])].sort(
+    (left, right) => parseTimeToMinutes(left) - parseTimeToMinutes(right)
+  );
+  const allowedDates = new Set(dates);
+  const allowedSlots = new Set(slots);
+  const byKey = new Map<string, RotationCell>();
+
+  for (const cell of nextExisting.cells) {
+    byKey.set(cellKey(cell), cell);
+  }
+  for (const cell of nextIncoming.cells) {
+    byKey.set(cellKey(cell), cell);
+  }
+
+  const cells = [...byKey.values()]
+    .filter((cell) => allowedDates.has(cell.date) && allowedSlots.has(cell.slotStart))
+    .sort((left, right) => {
+      const byDate = compareIsoDate(left.date, right.date);
+      if (byDate !== 0) {
+        return byDate;
+      }
+      return parseTimeToMinutes(left.slotStart) - parseTimeToMinutes(right.slotStart);
+    });
+  const merged: RotationResult = {
+    ...nextIncoming,
+    dates,
+    slots,
+    cells,
+    detectedActivities: [...new Set([...nextExisting.detectedActivities, ...nextIncoming.detectedActivities])]
+  };
+
+  return {
+    ...merged,
+    summary: summarizeRotation(cells, buildAgentListFromRotation(merged))
+  };
 }
 
 const DISABLED_SLOT_NAME = "Creneau libere";
@@ -263,6 +487,7 @@ function RouteLink({ active, children, href, onNavigate }: RouteLinkProps) {
 
 export default function App() {
   const [pathname, setPathname] = useState<string>(getPathname);
+  const [todayIsoDate, setTodayIsoDate] = useState<string>(() => getTodayIsoDate());
   const [parsedSchedule, setParsedSchedule] = useState<ParsedSchedule | null>(null);
   const [settings, setSettings] = useState<RotationSettings>(DEFAULT_SETTINGS);
   const [rotation, setRotation] = useState<RotationResult | null>(null);
@@ -300,6 +525,32 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const timer = window.setInterval(() => {
+      setTodayIsoDate((current) => {
+        const next = getTodayIsoDate();
+        return next === current ? current : next;
+      });
+    }, 60_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    startTransition(() => {
+      setParsedSchedule((current) => (current ? pruneParsedSchedulePastDates(current, todayIsoDate) : current));
+      setRotation((current) => (current ? pruneRotationPastDates(current, todayIsoDate) : current));
+      setPublished((current) =>
+        current
+          ? {
+              ...current,
+              rotation: pruneRotationPastDates(current.rotation, todayIsoDate)
+            }
+          : current
+      );
+    });
+  }, [todayIsoDate]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadPublished() {
@@ -307,7 +558,14 @@ export default function App() {
       try {
         const nextPublished = await fetchPublishedRotation();
         if (!cancelled) {
-          setPublished(nextPublished);
+          setPublished(
+            nextPublished
+              ? {
+                  ...nextPublished,
+                  rotation: pruneRotationPastDates(nextPublished.rotation, todayIsoDate)
+                }
+              : null
+          );
         }
       } catch (caughtError) {
         if (!cancelled) {
@@ -325,7 +583,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [todayIsoDate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -403,10 +661,8 @@ export default function App() {
     try {
       const response = await parseFile(file);
       startTransition(() => {
-        setParsedSchedule(response.parsedSchedule);
+        setParsedSchedule((current) => mergeParsedSchedules(current, response.parsedSchedule, todayIsoDate));
         setSettings(response.settings);
-        setRotation(null);
-        setSelectedCellKey(null);
       });
     } catch (caughtError) {
       setError(handleAuthError(caughtError, "Erreur d'import."));
@@ -424,14 +680,28 @@ export default function App() {
       return;
     }
 
+    const scheduleToGenerate = pruneParsedSchedulePastDates(parsedSchedule, todayIsoDate);
+    if (!scheduleToGenerate.dates.length) {
+      setError("Aucune date du jour ou future detectee dans les imports.");
+      return;
+    }
+
     setGenerationLoading(true);
     setError(null);
 
     try {
-      const nextRotation = await generateRotationRequest(parsedSchedule, settings);
+      const generatedRotation = await generateRotationRequest(scheduleToGenerate, settings);
+      const nextRotation = mergeRotations(rotation, generatedRotation, todayIsoDate);
       startTransition(() => {
+        setParsedSchedule(scheduleToGenerate);
         setRotation(nextRotation);
-        setSelectedCellKey(nextRotation.cells[0] ? cellKey(nextRotation.cells[0]) : null);
+        setSelectedCellKey((current) =>
+          current && nextRotation.cells.some((cell) => cellKey(cell) === current)
+            ? current
+            : nextRotation.cells[0]
+              ? cellKey(nextRotation.cells[0])
+              : null
+        );
       });
     } catch (caughtError) {
       setError(handleAuthError(caughtError, "Erreur de generation."));
@@ -445,11 +715,21 @@ export default function App() {
       return;
     }
 
+    const rotationToPublish = pruneRotationPastDates(rotation, todayIsoDate);
+    if (!rotationToPublish.dates.length) {
+      setError("Aucune colonne a publier: les dates sont toutes passees.");
+      return;
+    }
+
     setPublishLoading(true);
     setError(null);
     try {
-      const nextPublished = await publishRotation(rotation);
-      setPublished(nextPublished);
+      const nextPublished = await publishRotation(rotationToPublish);
+      setRotation(rotationToPublish);
+      setPublished({
+        ...nextPublished,
+        rotation: pruneRotationPastDates(nextPublished.rotation, todayIsoDate)
+      });
     } catch (caughtError) {
       setError(handleAuthError(caughtError, "Erreur de publication."));
     } finally {

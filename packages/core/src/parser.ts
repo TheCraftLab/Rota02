@@ -175,9 +175,6 @@ export function parseNiceWfmText(
         continue;
       }
 
-      currentDate = dateInLine;
-      dates.add(dateInLine);
-
       if (!currentAgent) {
         warnings.push({
           scope: "global",
@@ -186,6 +183,8 @@ export function parseNiceWfmText(
         continue;
       }
 
+      currentDate = dateInLine;
+      dates.add(dateInLine);
       lastDateByAgent.set(currentAgent.normalizedName, currentDate);
       const day = ensureDay(currentAgent, currentDate);
       day.intervals.push({
@@ -210,9 +209,6 @@ export function parseNiceWfmText(
         continue;
       }
 
-      currentDate = dateInLine;
-      dates.add(dateInLine);
-
       if (!currentAgent) {
         warnings.push({
           scope: "global",
@@ -221,6 +217,8 @@ export function parseNiceWfmText(
         continue;
       }
 
+      currentDate = dateInLine;
+      dates.add(dateInLine);
       lastDateByAgent.set(currentAgent.normalizedName, currentDate);
       const day = ensureDay(currentAgent, currentDate);
       day.intervals.push({
@@ -235,16 +233,17 @@ export function parseNiceWfmText(
 
     const dateInLine = inferIsoDate(line, defaultYear);
     if (dateInLine) {
-      currentDate = dateInLine;
-      dates.add(dateInLine);
       if (!currentAgent) {
         warnings.push({
           scope: "global",
           message: `Date detectee sans agent contexte: ${line}`
         });
-      } else {
-        ensureDay(currentAgent, dateInLine);
+        continue;
       }
+
+      currentDate = dateInLine;
+      dates.add(dateInLine);
+      ensureDay(currentAgent, dateInLine);
       continue;
     }
 

@@ -63,6 +63,13 @@ Open Time15:1517:30
 10/04/26Libre
 `;
 
+const METADATA_DATE_INPUT = `
+Export genere le 23/04/26 a 11:42
+Agent: 3109542 Assfeld, Isabel
+27/04/2026
+09:00 18:00 Open Time
+`;
+
 const BALANCED_REMOVAL_INPUT = `
 Agent: 3109001 Alpha, Alice
 07/04/2026
@@ -118,6 +125,13 @@ describe("parseNiceWfmText", () => {
       start: "00:00",
       end: "23:59"
     });
+  });
+
+  it("ignores metadata dates outside agent context", () => {
+    const parsed = parseNiceWfmText(METADATA_DATE_INPUT, "metadata.txt", "text/plain", new Date("2026-04-23T11:42:00Z"));
+
+    expect(parsed.dates).toEqual(["2026-04-27"]);
+    expect(parsed.agents[0]?.days["2026-04-27"]?.intervals).toHaveLength(1);
   });
 });
 

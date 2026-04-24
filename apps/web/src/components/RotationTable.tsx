@@ -55,7 +55,7 @@ export function RotationTable({
           <thead className={`sticky top-0 z-10 ${isKiosk ? "bg-ink" : "bg-sand"}`}>
             <tr>
               <th
-                className={`sticky left-0 z-20 min-w-[88px] border-b border-r border-slate/10 px-4 font-semibold ${
+                className={`sticky left-0 z-30 min-w-[88px] border-b border-r border-slate/10 px-4 font-semibold shadow-[6px_0_8px_-8px_rgba(15,25,35,0.4)] ${
                   isKiosk ? "bg-ink py-4 text-white" : "bg-sand py-3 text-ink"
                 }`}
               >
@@ -80,8 +80,8 @@ export function RotationTable({
             {rotation.slots.map((slot) => (
               <tr key={slot}>
                 <td
-                  className={`sticky left-0 min-w-[88px] border-b border-r border-slate/10 px-4 font-semibold ${
-                    isKiosk ? "bg-slate/5 py-4 text-ink" : "bg-white py-3 text-slate"
+                  className={`sticky left-0 z-20 min-w-[88px] border-b border-r border-slate/10 px-4 font-semibold shadow-[6px_0_8px_-8px_rgba(15,25,35,0.25)] ${
+                    isKiosk ? "bg-[#edf2f7] py-4 text-ink" : "bg-white py-3 text-slate"
                   }`}
                 >
                   {slot}
