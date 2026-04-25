@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import {
+  type AgentPreferences,
   compareIsoDate,
   getFrenchPublicHolidayLabel,
   formatDisplayDate,
@@ -25,14 +26,18 @@ import { SummaryPanel } from "./components/SummaryPanel";
 import { UploadCard } from "./components/UploadCard";
 import { StatusBadge } from "./components/StatusBadge";
 import {
+  deleteManagedAgent,
   downloadExport,
   fetchAdminSession,
+  fetchManagedAgents,
   fetchPublishedRotation,
   generateRotationRequest,
   loginAdmin,
   logoutAdmin,
   parseFile,
   publishRotation,
+  updateAgentPreferences,
+  type ManagedAgent,
   type PublishedRotationResponse
 } from "./lib/api";
 import { saveBlob } from "./lib/download";
@@ -346,6 +351,15 @@ function mergeRotations(
 }
 
 const DISABLED_SLOT_NAME = "Creneau libere";
+const WEEKDAY_OPTIONS = [
+  { value: 1, label: "Lun" },
+  { value: 2, label: "Mar" },
+  { value: 3, label: "Mer" },
+  { value: 4, label: "Jeu" },
+  { value: 5, label: "Ven" },
+  { value: 6, label: "Sam" },
+  { value: 7, label: "Dim" }
+];
 
 function buildRestoreState(cell: RotationCell): RotationCellRestoreState {
   return {
@@ -462,6 +476,16 @@ function restoreHolidayCell(cell: RotationCell): RotationCell {
   };
 }
 
+function formatBlockedDates(value: string[] | undefined): string {
+  return (value ?? []).join(", ");
+}
+
+function parseBlockedDatesInput(value: string): string[] {
+  return [...new Set(value.split(",").map((item) => item.trim()).filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item)))].sort(
+    (left, right) => left.localeCompare(right)
+  );
+}
+
 interface RouteLinkProps {
   active: boolean;
   children: string;
@@ -503,6 +527,10 @@ export default function App() {
   const [publicLoading, setPublicLoading] = useState(true);
   const [publishLoading, setPublishLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState<"csv" | "xlsx" | "pdf" | "copy" | null>(null);
+  const [managedAgents, setManagedAgents] = useState<ManagedAgent[]>([]);
+  const [managedAgentsLoading, setManagedAgentsLoading] = useState(false);
+  const [agentActionLoadingId, setAgentActionLoadingId] = useState<string | null>(null);
+  const [blockedDatesInput, setBlockedDatesInput] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const deferredRotation = useDeferredValue(rotation);
@@ -517,6 +545,26 @@ export default function App() {
 
     return collectAssignedAgentsForDate(deferredRotation, removedAgentDate);
   }, [deferredRotation, removedAgentDate]);
+
+  async function refreshManagedAgents() {
+    if (!isAdminRoute || !adminAuthenticated) {
+      setManagedAgents([]);
+      return;
+    }
+
+    setManagedAgentsLoading(true);
+    try {
+      const agents = await fetchManagedAgents();
+      setManagedAgents(agents);
+      setBlockedDatesInput(
+        Object.fromEntries(agents.map((agent) => [agent.id, formatBlockedDates(agent.preferences.blockedDates)]))
+      );
+    } catch (caughtError) {
+      setError(handleAuthError(caughtError, "Erreur de chargement des agents."));
+    } finally {
+      setManagedAgentsLoading(false);
+    }
+  }
 
   useEffect(() => {
     const handlePopState = () => setPathname(getPathname());
@@ -620,6 +668,10 @@ export default function App() {
   }, [isAdminRoute]);
 
   useEffect(() => {
+    void refreshManagedAgents();
+  }, [isAdminRoute, adminAuthenticated]);
+
+  useEffect(() => {
     if (!isAdminRoute || !adminAuthenticated || parsedSchedule || rotation || !published?.rotation) {
       return;
     }
@@ -664,6 +716,7 @@ export default function App() {
         setParsedSchedule((current) => mergeParsedSchedules(current, response.parsedSchedule, todayIsoDate));
         setSettings(response.settings);
       });
+      await refreshManagedAgents();
     } catch (caughtError) {
       setError(handleAuthError(caughtError, "Erreur d'import."));
     } finally {
@@ -791,6 +844,48 @@ export default function App() {
       setAdminAuthenticated(false);
     } catch (caughtError) {
       setError(handleAuthError(caughtError, "Erreur de deconnexion admin."));
+    }
+  }
+
+  async function handleAgentPreferenceUpdate(agent: ManagedAgent, patch: Partial<AgentPreferences>) {
+    setAgentActionLoadingId(agent.id);
+    setError(null);
+
+    try {
+      const updatedAgent = await updateAgentPreferences(agent.id, patch);
+      setManagedAgents((current) => current.map((item) => (item.id === updatedAgent.id ? updatedAgent : item)));
+      setBlockedDatesInput((current) => ({
+        ...current,
+        [updatedAgent.id]: formatBlockedDates(updatedAgent.preferences.blockedDates)
+      }));
+    } catch (caughtError) {
+      setError(handleAuthError(caughtError, "Erreur de mise a jour des preferences agent."));
+    } finally {
+      setAgentActionLoadingId(null);
+    }
+  }
+
+  async function handleDeleteAgent(agent: ManagedAgent) {
+    const confirmed = window.confirm(`Supprimer ${agent.displayName} de la base agents ?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setAgentActionLoadingId(agent.id);
+    setError(null);
+
+    try {
+      await deleteManagedAgent(agent.id);
+      setManagedAgents((current) => current.filter((item) => item.id !== agent.id));
+      setBlockedDatesInput((current) => {
+        const next = { ...current };
+        delete next[agent.id];
+        return next;
+      });
+    } catch (caughtError) {
+      setError(handleAuthError(caughtError, "Erreur de suppression agent."));
+    } finally {
+      setAgentActionLoadingId(null);
     }
   }
 
@@ -1049,6 +1144,133 @@ export default function App() {
         <AdminLogin loading={adminLoginLoading} onLogin={handleAdminLogin} />
       ) : (
         <div className="grid gap-5">
+          <section className="panel-surface rounded-4xl border border-gray-100 p-5 shadow-panel">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-widest text-slate/50">Base agents</p>
+                <p className="mt-1 text-sm text-slate">
+                  Les agents detectes a l'import sont ajoutes automatiquement ici. Vous pouvez gerer leurs preferences et les supprimer.
+                </p>
+              </div>
+              <StatusBadge tone="neutral">{managedAgents.length} agent(s)</StatusBadge>
+            </div>
+
+            {managedAgentsLoading ? (
+              <p className="mt-4 text-sm text-slate">Chargement des agents...</p>
+            ) : managedAgents.length ? (
+              <div className="mt-4 grid gap-3">
+                {managedAgents.map((agent) => {
+                  const loading = agentActionLoadingId === agent.id;
+                  const currentWeekdays = new Set(agent.preferences.blockedWeekdays ?? []);
+                  const blockedDatesValue = blockedDatesInput[agent.id] ?? formatBlockedDates(agent.preferences.blockedDates);
+
+                  return (
+                    <article key={agent.id} className="rounded-2xl border border-gray-100 bg-white p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-ink">{agent.displayName}</p>
+                          <p className="text-xs text-slate/70">{agent.agentId ? `ID NICE: ${agent.agentId}` : `Cle: ${agent.id}`}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-coral/30 bg-coral/8 px-3 py-1.5 text-xs font-medium text-coral transition hover:bg-coral/15 disabled:opacity-60"
+                          onClick={() => void handleDeleteAgent(agent)}
+                          disabled={loading}
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                            agent.preferences.preferFewerSlots
+                              ? "border-amber/40 bg-amber/20 text-amber"
+                              : "border-gray-200 bg-white text-slate hover:bg-gray-50"
+                          } disabled:opacity-60`}
+                          onClick={() =>
+                            void handleAgentPreferenceUpdate(agent, {
+                              preferFewerSlots: !agent.preferences.preferFewerSlots
+                            })
+                          }
+                          disabled={loading}
+                        >
+                          {agent.preferences.preferFewerSlots ? "Preference: moins de creneaux (active)" : "Preference: moins de creneaux"}
+                        </button>
+                      </div>
+
+                      <div className="mt-3">
+                        <p className="text-xs font-medium text-slate/70">Jours a ne pas planifier</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {WEEKDAY_OPTIONS.map((option) => {
+                            const selected = currentWeekdays.has(option.value);
+                            const nextWeekdays = selected
+                              ? (agent.preferences.blockedWeekdays ?? []).filter((value) => value !== option.value)
+                              : [...(agent.preferences.blockedWeekdays ?? []), option.value];
+
+                            return (
+                              <button
+                                key={`${agent.id}-${option.value}`}
+                                type="button"
+                                className={`rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+                                  selected
+                                    ? "border-ink bg-ink text-white"
+                                    : "border-gray-200 bg-white text-slate hover:bg-gray-50"
+                                } disabled:opacity-60`}
+                                onClick={() =>
+                                  void handleAgentPreferenceUpdate(agent, {
+                                    blockedWeekdays: nextWeekdays
+                                  })
+                                }
+                                disabled={loading}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <p className="text-xs font-medium text-slate/70">Dates bloquees (format AAAA-MM-JJ, separees par virgule)</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <input
+                            type="text"
+                            value={blockedDatesValue}
+                            onChange={(event) =>
+                              setBlockedDatesInput((current) => ({
+                                ...current,
+                                [agent.id]: event.target.value
+                              }))
+                            }
+                            placeholder="2026-05-01, 2026-05-08"
+                            className="min-w-[280px] flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-ink outline-none ring-amber/30 transition focus:border-amber/60 focus:ring-4"
+                            disabled={loading}
+                          />
+                          <button
+                            type="button"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-slate transition hover:bg-gray-50 disabled:opacity-60"
+                            onClick={() =>
+                              void handleAgentPreferenceUpdate(agent, {
+                                blockedDates: parseBlockedDatesInput(blockedDatesValue)
+                              })
+                            }
+                            disabled={loading}
+                          >
+                            Enregistrer dates
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-slate">Aucun agent en base pour le moment. Importez un fichier pour les detecter.</p>
+            )}
+          </section>
+
           <UploadCard parsedSchedule={parsedSchedule} loading={parseLoading} onFileSelected={handleFileSelected} />
           <SettingsPanel
             settings={settings}

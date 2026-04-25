@@ -167,6 +167,18 @@ describe("evaluateAgentEligibility", () => {
     expect(result.eligible).toBe(true);
     expect(result.blockingIntervals).toHaveLength(0);
   });
+
+  it("applies admin blocked-date preferences", () => {
+    const parsed = parseNiceWfmText(SAMPLE_INPUT);
+    const agent = parsed.agents.find((item) => item.displayName === "Lea MARTIN");
+
+    expect(agent).toBeDefined();
+    agent!.preferences = { blockedDates: ["2026-04-07"] };
+
+    const result = evaluateAgentEligibility(agent!, "2026-04-07", "09:00", "10:00", DEFAULT_SETTINGS);
+    expect(result.eligible).toBe(false);
+    expect(result.reasons[0]).toContain("date bloquee");
+  });
 });
 
 describe("generateRotation", () => {

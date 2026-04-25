@@ -9,10 +9,18 @@ import {
   generateRotation,
   parseNiceWfmText,
   toClipboardTable,
+  type AgentPreferences,
   type RotationResult,
   type RotationSettings,
   type ParsedSchedule
 } from "@rota/core";
+import {
+  applyStoredPreferencesToSchedule,
+  deleteStoredAgent,
+  listStoredAgents,
+  updateStoredAgentPreferences,
+  upsertAgentsFromImport
+} from "./agent-store";
 import { isAdminAuthenticated, loginAdmin, logoutAdmin, requireAdminAuth, verifyAdminPassword } from "./auth";
 import { config } from "./config";
 import { buildRotationCsv, buildRotationPdf, buildRotationWorkbook } from "./exporters";
@@ -82,6 +90,56 @@ app.post("/api/admin/logout", (_request, response) => {
   response.json({ authenticated: false });
 });
 
+app.get("/api/agents", requireAdminAuth, async (_request, response) => {
+  try {
+    const agents = await listStoredAgents(config.agentsStorePath);
+    response.json({ agents });
+  } catch (error) {
+    response.status(500).json({
+      error: error instanceof Error ? error.message : "Impossible de charger les agents."
+    });
+  }
+});
+
+app.patch("/api/agents/:id/preferences", requireAdminAuth, async (request, response) => {
+  try {
+    const id = Array.isArray(request.params.id) ? request.params.id[0] : request.params.id;
+    if (!id) {
+      response.status(400).json({ error: "Identifiant agent manquant." });
+      return;
+    }
+
+    const preferences = (request.body?.preferences ?? {}) as Partial<AgentPreferences>;
+    const agent = await updateStoredAgentPreferences(config.agentsStorePath, id, preferences);
+    response.json({ agent });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Impossible de mettre a jour les preferences.";
+    response.status(message === "Agent introuvable." ? 404 : 400).json({ error: message });
+  }
+});
+
+app.delete("/api/agents/:id", requireAdminAuth, async (request, response) => {
+  try {
+    const id = Array.isArray(request.params.id) ? request.params.id[0] : request.params.id;
+    if (!id) {
+      response.status(400).json({ error: "Identifiant agent manquant." });
+      return;
+    }
+
+    const deleted = await deleteStoredAgent(config.agentsStorePath, id);
+    if (!deleted) {
+      response.status(404).json({ error: "Agent introuvable." });
+      return;
+    }
+
+    response.status(204).send();
+  } catch (error) {
+    response.status(500).json({
+      error: error instanceof Error ? error.message : "Impossible de supprimer l'agent."
+    });
+  }
+});
+
 app.get("/api/published", async (_request, response) => {
   try {
     const published = await readPublishedRotation(config.publishedRotationPath);
@@ -116,9 +174,15 @@ app.post("/api/parse", requireAdminAuth, upload.single("file"), async (request, 
       request.file.mimetype,
       new Date()
     );
+    const syncResult = await upsertAgentsFromImport(config.agentsStorePath, parsedSchedule.agents);
+
     response.json({
       parsedSchedule,
-      settings: DEFAULT_SETTINGS
+      settings: DEFAULT_SETTINGS,
+      agentSync: {
+        createdCount: syncResult.createdCount,
+        updatedCount: syncResult.updatedCount
+      }
     });
   } catch (error) {
     response.status(400).json({
@@ -127,7 +191,7 @@ app.post("/api/parse", requireAdminAuth, upload.single("file"), async (request, 
   }
 });
 
-app.post("/api/generate", requireAdminAuth, (request, response) => {
+app.post("/api/generate", requireAdminAuth, async (request, response) => {
   try {
     const parsedSchedule = request.body.parsedSchedule as ParsedSchedule | undefined;
     const settings = request.body.settings as Partial<RotationSettings> | undefined;
@@ -137,7 +201,14 @@ app.post("/api/generate", requireAdminAuth, (request, response) => {
       return;
     }
 
-    const rotation = generateRotation(parsedSchedule, settings);
+    const storedAgents = await listStoredAgents(config.agentsStorePath);
+    const scheduleWithPreferences = applyStoredPreferencesToSchedule(parsedSchedule, storedAgents);
+    if (!scheduleWithPreferences.agents.length) {
+      response.status(400).json({ error: "Aucun agent actif disponible apres application de la base agents." });
+      return;
+    }
+
+    const rotation = generateRotation(scheduleWithPreferences, settings);
     response.json(rotation);
   } catch (error) {
     response.status(400).json({

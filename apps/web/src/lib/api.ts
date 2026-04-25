@@ -1,8 +1,12 @@
-import type { ParsedSchedule, RotationResult, RotationSettings } from "@rota/core";
+import type { AgentPreferences, ParsedSchedule, RotationResult, RotationSettings } from "@rota/core";
 
 interface ParseResponse {
   parsedSchedule: ParsedSchedule;
   settings: RotationSettings;
+  agentSync?: {
+    createdCount: number;
+    updatedCount: number;
+  };
 }
 
 export interface PublishedRotationResponse {
@@ -12,6 +16,16 @@ export interface PublishedRotationResponse {
 
 export interface AdminSessionResponse {
   authenticated: boolean;
+}
+
+export interface ManagedAgent {
+  id: string;
+  agentId: string | null;
+  displayName: string;
+  normalizedName: string;
+  preferences: AgentPreferences;
+  createdAt: string;
+  updatedAt: string;
 }
 
 async function parseApiError(response: Response, fallback: string): Promise<Error> {
@@ -148,4 +162,49 @@ export async function logoutAdmin(): Promise<AdminSessionResponse> {
   }
 
   return response.json();
+}
+
+export async function fetchManagedAgents(): Promise<ManagedAgent[]> {
+  const response = await fetch("/api/agents", {
+    credentials: "same-origin"
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, "Erreur de chargement des agents.");
+  }
+
+  const payload = (await response.json()) as { agents: ManagedAgent[] };
+  return payload.agents ?? [];
+}
+
+export async function updateAgentPreferences(
+  agentId: string,
+  preferences: Partial<AgentPreferences>
+): Promise<ManagedAgent> {
+  const response = await fetch(`/api/agents/${encodeURIComponent(agentId)}/preferences`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ preferences }),
+    credentials: "same-origin"
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, "Erreur de mise a jour des preferences.");
+  }
+
+  const payload = (await response.json()) as { agent: ManagedAgent };
+  return payload.agent;
+}
+
+export async function deleteManagedAgent(agentId: string): Promise<void> {
+  const response = await fetch(`/api/agents/${encodeURIComponent(agentId)}`, {
+    method: "DELETE",
+    credentials: "same-origin"
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, "Erreur de suppression de l'agent.");
+  }
 }

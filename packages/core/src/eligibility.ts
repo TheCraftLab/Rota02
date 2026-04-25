@@ -1,6 +1,6 @@
 import type { AgentSchedule, ParsedInterval, RotationSettings } from "./types";
 import { normalizeActivityLabel } from "./utils";
-import { intersectRange, rangeContains } from "./utils";
+import { getIsoWeekday, intersectRange, rangeContains } from "./utils";
 
 const OPEN_TIME_ACTIVITY = "open time";
 const PAID_SHORT_BREAK_PATTERN = /^petite pause remuneree\b/;
@@ -23,6 +23,26 @@ export function evaluateAgentEligibility(
   slotEnd: string,
   settings: RotationSettings
 ): EligibilityResult {
+  const blockedDates = new Set(agent.preferences?.blockedDates ?? []);
+  if (blockedDates.has(date)) {
+    return {
+      eligible: false,
+      reasons: ["Indisponible: date bloquee dans les preferences admin."],
+      matchedEligibleIntervals: [],
+      blockingIntervals: []
+    };
+  }
+
+  const blockedWeekdays = new Set(agent.preferences?.blockedWeekdays ?? []);
+  if (blockedWeekdays.has(getIsoWeekday(date))) {
+    return {
+      eligible: false,
+      reasons: ["Indisponible: jour de semaine bloque dans les preferences admin."],
+      matchedEligibleIntervals: [],
+      blockingIntervals: []
+    };
+  }
+
   const day = agent.days[date];
 
   if (!day) {

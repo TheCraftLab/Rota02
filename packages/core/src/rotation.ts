@@ -94,6 +94,7 @@ function rankCandidate(
   const counter = counters.get(key) ?? { total: 0, byDate: {} };
   const totalAssigned = counter.total;
   const dayAssigned = counter.byDate[date] ?? 0;
+  const preferencePenalty = agent.preferences?.preferFewerSlots ? 1 : 0;
   const consecutivePenalty =
     settings.avoidConsecutive && previousAgentId && previousAgentId === (agent.agentId ?? agent.normalizedName)
       ? 1
@@ -101,14 +102,15 @@ function rankCandidate(
 
   if (settings.fairnessMode === "soft") {
     return [
-      totalAssigned * 100 + dayAssigned * 10 + consecutivePenalty,
-      totalAssigned,
+      totalAssigned * 100 + dayAssigned * 10 + consecutivePenalty + preferencePenalty * 35,
+      totalAssigned + preferencePenalty,
       dayAssigned,
-      consecutivePenalty
+      consecutivePenalty,
+      preferencePenalty
     ];
   }
 
-  return [totalAssigned, dayAssigned, consecutivePenalty];
+  return [totalAssigned + preferencePenalty, dayAssigned, consecutivePenalty, preferencePenalty];
 }
 
 function compareCandidateReason(a: CandidateReason, b: CandidateReason): number {

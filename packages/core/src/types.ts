@@ -17,6 +17,13 @@ export interface AgentSchedule {
   displayName: string;
   normalizedName: string;
   days: Record<string, ParsedDay>;
+  preferences?: AgentPreferences;
+}
+
+export interface AgentPreferences {
+  blockedDates?: string[];
+  blockedWeekdays?: number[];
+  preferFewerSlots?: boolean;
 }
 
 export interface ParseWarning {
