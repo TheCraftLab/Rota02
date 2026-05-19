@@ -19,10 +19,12 @@ import {
   type RotationSettings
 } from "@rota/core";
 import { AdminLogin } from "./components/AdminLogin";
+import { ColorPicker } from "./components/ColorPicker";
 import { InspectorDrawer } from "./components/InspectorDrawer";
 import { RotationTable } from "./components/RotationTable";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { SummaryPanel } from "./components/SummaryPanel";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { UploadCard } from "./components/UploadCard";
 import { StatusBadge } from "./components/StatusBadge";
 import {
@@ -41,6 +43,7 @@ import {
   type PublishedRotationResponse
 } from "./lib/api";
 import { saveBlob } from "./lib/download";
+import { applyTheme, getThemeFromStorage, setThemeInStorage, getAccentColorFromStorage, setAccentColorInStorage, type AccentColor, type Theme } from "./lib/theme";
 
 function cellKey(cell: RotationCell): string {
   return `${cell.date}-${cell.slotStart}`;
@@ -499,8 +502,8 @@ function RouteLink({ active, children, href, onNavigate }: RouteLinkProps) {
       type="button"
       className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
         active
-          ? "bg-ink text-white"
-          : "border border-gray-200 bg-white text-slate hover:bg-gray-50"
+          ? "bg-accent-500 text-white dark:bg-accent-500"
+          : "border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 text-slate dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700"
       }`}
       onClick={() => onNavigate(href)}
     >
@@ -512,6 +515,8 @@ function RouteLink({ active, children, href, onNavigate }: RouteLinkProps) {
 export default function App() {
   const [pathname, setPathname] = useState<string>(getPathname);
   const [todayIsoDate, setTodayIsoDate] = useState<string>(() => getTodayIsoDate());
+  const [theme, setTheme] = useState<Theme>(() => getThemeFromStorage());
+  const [accentColor, setAccentColor] = useState<AccentColor>(() => getAccentColorFromStorage());
   const [parsedSchedule, setParsedSchedule] = useState<ParsedSchedule | null>(null);
   const [settings, setSettings] = useState<RotationSettings>(DEFAULT_SETTINGS);
   const [rotation, setRotation] = useState<RotationResult | null>(null);
@@ -565,6 +570,18 @@ export default function App() {
       setManagedAgentsLoading(false);
     }
   }
+
+  useEffect(() => {
+    applyTheme(theme, accentColor);
+  }, [theme, accentColor]);
+
+  useEffect(() => {
+    setThemeInStorage(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    setAccentColorInStorage(accentColor);
+  }, [accentColor]);
 
   useEffect(() => {
     const handlePopState = () => setPathname(getPathname());
@@ -1039,55 +1056,59 @@ export default function App() {
   if (!isAdminRoute) {
     return (
       <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
-        <header className="mb-6">
-          <div className="panel-surface rounded-4xl border border-gray-100 px-6 py-5 shadow-panel">
-            <p className="text-xs font-medium uppercase tracking-widest text-slate/50">Atelier11.app</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">Planning Chat</h1>
+        <header className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-widest text-slate/50 dark:text-gray-500">Rotation Planning</p>
+            <h1 className="mt-2 text-4xl font-bold tracking-tight text-ink dark:text-white sm:text-5xl">Rotation Schedule</h1>
+            <p className="mt-2 text-sm text-slate dark:text-gray-400">
+              Current schedule and assignments
+            </p>
           </div>
+          <ThemeToggle theme={theme} onThemeChange={setTheme} />
         </header>
 
         {error ? (
-          <div className="mb-5 rounded-xl border border-coral/20 bg-coral/8 px-4 py-3 text-sm text-coral">
+          <div className="mb-5 rounded-xl border border-danger/20 bg-danger/8 px-4 py-3 text-sm text-danger dark:text-danger/90">
             {error}
           </div>
         ) : null}
 
         {publicLoading ? (
-          <section className="panel-surface rounded-4xl border border-gray-100 p-10 text-center shadow-panel">
-            <p className="text-base font-medium text-ink">Chargement de la rotation publiee...</p>
+          <section className="panel-surface rounded-2xl border border-gray-200 dark:border-gray-700 p-10 text-center shadow-panel">
+            <p className="text-base font-medium text-ink dark:text-white">Loading published rotation...</p>
           </section>
         ) : published?.rotation ? (
-          <div className="grid gap-5">
+          <div className="grid gap-8">
             <RotationTable
               rotation={published.rotation}
               selectedCellKey={null}
               interactive={false}
-              title="Rotation chat"
-              description={`Publication du ${formatPublishedAt(published.publishedAt)}`}
+              title="Current Rotation"
+              description={`Last updated ${formatPublishedAt(published.publishedAt)}`}
               density="kiosk"
             />
           </div>
         ) : (
-          <section className="panel-surface rounded-4xl border border-gray-100 p-10 text-center shadow-panel">
-            <p className="text-base font-medium text-ink">Aucune rotation n'est encore publiee.</p>
-            <p className="mt-2 text-sm text-slate">
-              Passez par l'administration pour importer un fichier NICE WFM, generer une rotation puis la publier.
+          <section className="panel-surface rounded-2xl border border-gray-200 dark:border-gray-700 p-10 text-center shadow-panel">
+            <p className="text-base font-medium text-ink dark:text-white">No rotation published yet.</p>
+            <p className="mt-2 text-sm text-slate dark:text-gray-400">
+              Contact administration to import and publish a rotation schedule.
             </p>
           </section>
         )}
 
-        <footer className="mt-8 border-t border-gray-100 px-2 pt-5 text-sm text-slate/60">
+        <footer className="mt-12 border-t border-gray-200 dark:border-gray-700 px-2 pt-5 text-sm text-slate/60 dark:text-gray-500">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p>© {new Date().getFullYear()} Atelier11.app</p>
+            <p>© {new Date().getFullYear()} Rotation Planning</p>
             {published?.publishedAt ? (
-              <p>Derniere mise a jour : {formatPublishedAt(published.publishedAt)}</p>
+              <p>Last updated: {formatPublishedAt(published.publishedAt)}</p>
             ) : null}
             <button
               type="button"
-              className="text-left text-sm font-medium text-slate underline underline-offset-4 hover:text-ink sm:text-right"
+              className="text-left text-sm font-medium text-slate dark:text-gray-400 underline underline-offset-4 hover:text-accent-500 dark:hover:text-accent-500 sm:text-right"
               onClick={() => navigateTo("/admin", setPathname)}
             >
-              Acces administration
+              Admin access
             </button>
           </div>
         </footer>
@@ -1099,12 +1120,12 @@ export default function App() {
     <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
       <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-widest text-slate/50">Atelier11.app — Administration</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            Rotation de chat
+          <p className="text-xs font-medium uppercase tracking-widest text-slate/50 dark:text-gray-500">Rotation Management — Admin</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink dark:text-white sm:text-4xl">
+            Rotation Control
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate">
-            Import NICE WFM, generation, retouches et publication vers l'index public.
+          <p className="mt-2 max-w-2xl text-sm text-slate dark:text-gray-400">
+            Import, generate, edit and publish rotations.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1112,38 +1133,40 @@ export default function App() {
             Admin
           </RouteLink>
           <RouteLink active={false} href="/" onNavigate={(href) => navigateTo(href, setPathname)}>
-            Index public
+            Public
           </RouteLink>
           {published?.publishedAt ? (
-            <StatusBadge tone="success">Publie {formatPublishedAt(published.publishedAt)}</StatusBadge>
+            <StatusBadge tone="success">Published {formatPublishedAt(published.publishedAt)}</StatusBadge>
           ) : null}
-          <StatusBadge tone={isPending ? "warning" : "neutral"}>{isPending ? "Mise a jour..." : "Pret"}</StatusBadge>
+          <StatusBadge tone={isPending ? "warning" : "neutral"}>{isPending ? "Updating..." : "Ready"}</StatusBadge>
+          <ThemeToggle theme={theme} onThemeChange={setTheme} />
           {adminAuthenticated ? (
             <button
               type="button"
-              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-slate hover:bg-gray-50"
+              className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm font-medium text-slate dark:text-gray-300 transition hover:bg-gray-50 dark:hover:bg-slate-700"
               onClick={() => void handleAdminLogout()}
             >
-              Se deconnecter
+              Logout
             </button>
           ) : null}
         </div>
       </header>
 
       {error ? (
-        <div className="mb-5 rounded-xl border border-coral/20 bg-coral/8 px-4 py-3 text-sm text-coral">
+        <div className="mb-5 rounded-xl border border-danger/20 bg-danger/8 px-4 py-3 text-sm text-danger dark:text-danger/90">
           {error}
         </div>
       ) : null}
 
       {adminChecking ? (
-        <section className="panel-surface rounded-4xl border border-gray-100 p-10 text-center shadow-panel">
-          <p className="text-base font-medium text-ink">Verification de la session admin...</p>
+        <section className="panel-surface rounded-2xl border border-gray-200 dark:border-gray-700 p-10 text-center shadow-panel">
+          <p className="text-base font-medium text-ink dark:text-white">Verifying admin session...</p>
         </section>
       ) : !adminAuthenticated ? (
         <AdminLogin loading={adminLoginLoading} onLogin={handleAdminLogin} />
       ) : (
         <div className="grid gap-5">
+          <ColorPicker accentColor={accentColor} onColorChange={setAccentColor} />>
           <section className="panel-surface rounded-4xl border border-gray-100 p-5 shadow-panel">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
