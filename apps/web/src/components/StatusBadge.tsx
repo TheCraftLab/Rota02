@@ -6,10 +6,10 @@ interface StatusBadgeProps {
 }
 
 const toneClasses: Record<StatusBadgeProps["tone"], string> = {
-  neutral: "bg-gray-100 dark:bg-gray-700 text-slate dark:text-gray-300",
-  success: "bg-success/12 text-success dark:text-success",
-  warning: "bg-accent-500/12 text-accent-500 dark:text-accent-500",
-  danger: "bg-danger/12 text-danger dark:text-danger"
+  neutral: "bg-gray-100 text-slate",
+  success: "bg-mint/12 text-mint",
+  warning: "bg-amber/12 text-amber",
+  danger: "bg-coral/12 text-coral"
 };
 
 export function StatusBadge({ tone, children }: StatusBadgeProps) {
