@@ -23,19 +23,22 @@ export function pad(value: number): string {
 
 export function parseTimeToMinutes(value: string): number {
   const match = value.match(/^(\d{1,2}):(\d{2})$/);
+
   if (!match) {
-    throw new Error(`Heure invalide: ${value}`);
+    throw new Error('Heure invalide: ${value}');
   }
 
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
+
   return hours * 60 + minutes;
 }
 
 export function minutesToTime(value: number): string {
   const hours = Math.floor(value / 60);
   const minutes = value % 60;
-  return `${pad(hours)}:${pad(minutes)}`;
+
+  return '${pad(hours)}:${pad(minutes)}';
 }
 
 export function compareIsoDate(a: string, b: string): number {
@@ -44,23 +47,27 @@ export function compareIsoDate(a: string, b: string): number {
 
 export function formatDisplayDate(isoDate: string): string {
   const [year, month, day] = isoDate.split("-");
-  return `${day}/${month}/${year}`;
+
+  return '${day}/${month}/${year}';
 }
 
 export function formatWeekday(isoDate: string, locale = "fr-FR"): string {
-  const date = new Date(`${isoDate}T12:00:00`);
+  const date = new Date('${isoDate}T12:00:00');
   const label = new Intl.DateTimeFormat(locale, { weekday: "long" }).format(date);
-  return label ? `${label.charAt(0).toUpperCase()}${label.slice(1)}` : isoDate;
+
+  return label ? '${label.charAt(0).toUpperCase()}${label.slice(1)}' : isoDate;
 }
 
 export function getIsoWeekday(isoDate: string): number {
-  const date = new Date(`${isoDate}T12:00:00`);
+  const date = new Date('${isoDate}T12:00:00');
   const weekday = date.getDay();
+
   return weekday === 0 ? 7 : weekday;
 }
 
 export function inferIsoDate(raw: string, defaultYear: number): string | null {
   const match = raw.match(/(\d{2})\/(\d{2})(?:\/(\d{4}|\d{2}))?/);
+
   if (!match) {
     return null;
   }
@@ -68,6 +75,7 @@ export function inferIsoDate(raw: string, defaultYear: number): string | null {
   const day = Number(match[1]);
   const month = Number(match[2]);
   let year = match[3] ? Number(match[3]) : defaultYear;
+
   if (year < 100) {
     year += 2000;
   }
@@ -76,7 +84,7 @@ export function inferIsoDate(raw: string, defaultYear: number): string | null {
     return null;
   }
 
-  return `${year}-${pad(month)}-${pad(day)}`;
+  return '${year}-${pad(month)}-${pad(day)}';
 }
 
 export function expandSlots(startTime: string, endTime: string, step: number): string[] {
@@ -96,20 +104,17 @@ export interface RotationSlot {
   end: string;
 }
 
-export function buildRotationSlots(_startTime: string, endTime: string, step: number): RotationSlot[] {
+export function buildRotationSlots(startTime: string, endTime: string, step: number): RotationSlot[] {
+  const start = parseTimeToMinutes(startTime);
   const end = parseTimeToMinutes(endTime);
-  const slots: RotationSlot[] = [];
-  const specialStart = parseTimeToMinutes("08:30");
-  const specialEnd = parseTimeToMinutes("10:00");
 
-  if (end > specialStart) {
-    slots.push({
-      start: "08:30",
-      end: minutesToTime(Math.min(end, specialEnd))
-    });
+  if (start >= end) {
+    return [];
   }
 
-  for (let cursor = specialEnd; cursor < end; cursor += step) {
+  const slots: RotationSlot[] = [];
+
+  for (let cursor = start; cursor < end; cursor += step) {
     slots.push({
       start: minutesToTime(cursor),
       end: minutesToTime(Math.min(cursor + step, end))
@@ -139,7 +144,9 @@ function computeEasterSunday(year: number): Date {
 
 function addUtcDays(date: Date, days: number): Date {
   const copy = new Date(date);
+
   copy.setUTCDate(copy.getUTCDate() + days);
+
   return copy;
 }
 
@@ -150,6 +157,7 @@ function toIsoDate(date: Date): string {
 export function getFrenchPublicHolidayLabel(isoDate: string): string | null {
   const [yearPart] = isoDate.split("-");
   const year = Number(yearPart);
+
   if (!Number.isInteger(year)) {
     return null;
   }
@@ -166,14 +174,14 @@ export function getFrenchPublicHolidayLabel(isoDate: string): string | null {
   }
 
   const fixedHolidays = new Map<string, string>([
-    [`${year}-01-01`, "Jour de l'an"],
-    [`${year}-05-01`, "Fete du Travail"],
-    [`${year}-05-08`, "Victoire 1945"],
-    [`${year}-07-14`, "Fete nationale"],
-    [`${year}-08-15`, "Assomption"],
-    [`${year}-11-01`, "Toussaint"],
-    [`${year}-11-11`, "Armistice"],
-    [`${year}-12-25`, "Noel"]
+    ['${year}-01-01', "Jour de l'an"],
+    ['${year}-05-01', "Fete du Travail"],
+    ['${year}-05-08', "Victoire 1945"],
+    ['${year}-07-14', "Fete nationale"],
+    ['${year}-08-15', "Assomption"],
+    ['${year}-11-01', "Toussaint"],
+    ['${year}-11-11', "Armistice"],
+    ['${year}-12-25', "Noel"]
   ]);
 
   return fixedHolidays.get(isoDate) ?? null;
@@ -211,6 +219,7 @@ export function average(values: number[]): number {
   if (!values.length) {
     return 0;
   }
+
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
@@ -221,5 +230,6 @@ export function standardDeviation(values: number[]): number {
 
   const avg = average(values);
   const variance = average(values.map((value) => (value - avg) ** 2));
+
   return Math.sqrt(variance);
 }
