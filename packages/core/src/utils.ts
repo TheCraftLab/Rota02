@@ -25,7 +25,7 @@ export function parseTimeToMinutes(value: string): number {
   const match = value.match(/^(\d{1,2}):(\d{2})$/);
 
   if (!match) {
-    throw new Error('Heure invalide: ${value}');
+    throw new Error(`Heure invalide: ${value}`);
   }
 
   const hours = Number(match[1]);
@@ -38,7 +38,7 @@ export function minutesToTime(value: number): string {
   const hours = Math.floor(value / 60);
   const minutes = value % 60;
 
-  return '${pad(hours)}:${pad(minutes)}';
+  return `${pad(hours)}:${pad(minutes)}`;
 }
 
 export function compareIsoDate(a: string, b: string): number {
@@ -48,18 +48,18 @@ export function compareIsoDate(a: string, b: string): number {
 export function formatDisplayDate(isoDate: string): string {
   const [year, month, day] = isoDate.split("-");
 
-  return '${day}/${month}/${year}';
+  return `${day}/${month}/${year}`;
 }
 
 export function formatWeekday(isoDate: string, locale = "fr-FR"): string {
-  const date = new Date('${isoDate}T12:00:00');
+  const date = new Date(`${isoDate}T12:00:00`);
   const label = new Intl.DateTimeFormat(locale, { weekday: "long" }).format(date);
 
-  return label ? '${label.charAt(0).toUpperCase()}${label.slice(1)}' : isoDate;
+  return label ? `${label.charAt(0).toUpperCase()}${label.slice(1)}` : isoDate;
 }
 
 export function getIsoWeekday(isoDate: string): number {
-  const date = new Date('${isoDate}T12:00:00');
+  const date = new Date(`${isoDate}T12:00:00`);
   const weekday = date.getDay();
 
   return weekday === 0 ? 7 : weekday;
@@ -84,7 +84,7 @@ export function inferIsoDate(raw: string, defaultYear: number): string | null {
     return null;
   }
 
-  return '${year}-${pad(month)}-${pad(day)}';
+  return `${year}-${pad(month)}-${pad(day)}`;
 }
 
 export function expandSlots(startTime: string, endTime: string, step: number): string[] {
@@ -175,14 +175,14 @@ export function getFrenchPublicHolidayLabel(isoDate: string): string | null {
   }
 
   const fixedHolidays = new Map<string, string>([
-    ['${year}-01-01', "Jour de l'an"],
-    ['${year}-05-01', "Fete du Travail"],
-    ['${year}-05-08', "Victoire 1945"],
-    ['${year}-07-14', "Fete nationale"],
-    ['${year}-08-15', "Assomption"],
-    ['${year}-11-01', "Toussaint"],
-    ['${year}-11-11', "Armistice"],
-    ['${year}-12-25', "Noel"]
+    [`${year}-01-01`, "Jour de l'an"],
+    [`${year}-05-01`, "Fete du Travail"],
+    [`${year}-05-08`, "Victoire 1945"],
+    [`${year}-07-14`, "Fete nationale"],
+    [`${year}-08-15`, "Assomption"],
+    [`${year}-11-01`, "Toussaint"],
+    [`${year}-11-11`, "Armistice"],
+    [`${year}-12-25`, "Noel"]
   ]);
 
   return fixedHolidays.get(isoDate) ?? null;
