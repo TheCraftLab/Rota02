@@ -163,6 +163,7 @@ export function getFrenchPublicHolidayLabel(isoDate: string): string | null {
   }
 
   const easterSunday = computeEasterSunday(year);
+
   const mobileHolidays = new Map<string, string>([
     [toIsoDate(addUtcDays(easterSunday, 1)), "Lundi de Paques"],
     [toIsoDate(addUtcDays(easterSunday, 39)), "Ascension"],
