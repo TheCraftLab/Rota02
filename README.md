@@ -115,14 +115,8 @@ Un agent n'est affecte que si une plage `Open Time` couvre l'integralite du cren
 
 ## Algorithme de rotation
 
-Le premier creneau du matin est fixe:
-
-- `08:30 -> 10:00`
-
-La rotation est generee uniquement sur les dates detectees dans le fichier importe.
-
-Puis le reste de la journee suit la granularite choisie jusqu'a `endTime`.
-
+La rotation commence a l'heure definie dans 'settings.startTime'.
+Les creneaux suivent ensuite la duree choisie dans 'settings.slotMinutes' jusqu'a 'settings.endTime'.
 Pour chaque creneau:
 
 1. Lister les agents eligibles sur tout le creneau.
