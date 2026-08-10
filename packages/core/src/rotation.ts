@@ -9,7 +9,16 @@ import type {
   RotationSummary,
   ParsedSchedule
 } from "./types";
-import { average, buildRotationSlots, formatDisplayDate, getFrenchPublicHolidayLabel, normalizeName, standardDeviation } from "./utils";
+import {
+  average,
+  buildRotationSlots,
+  formatDisplayDate,
+  getFrenchPublicHolidayLabel,
+  normalizeActivityLabel,
+  normalizeName,
+  rangeContains,
+  standardDeviation
+} from "./utils";
 
 interface MutableCounter {
   total: number;
@@ -19,6 +28,7 @@ interface MutableCounter {
 const NON_COVERED_NAME = "Non couvert";
 const HOLIDAY_NAME = "Ferie";
 const DISABLED_SLOT_NAME = "Creneau libere";
+const OPEN_TIME_ACTIVITY = "open time";
 
 function resolveAgentKey(agentId: string | null, agentName: string): string {
   return agentId ?? normalizeName(agentName);
@@ -71,14 +81,14 @@ function buildRemovalReasons(
   dayBefore: number
 ): string[] {
   return [
-    `Reaffectation automatique: ${removedAgentName} est retire(e) de la journee ${formatDisplayDate(date)}.`,
-    `${replacementName} est choisi car il a le moins de creneaux (${globalBefore} global, ${dayBefore} sur la journee).`
+    'Reaffectation automatique: ${removedAgentName} est retire(e) de la journee ${formatDisplayDate(date)}.',
+    '${replacementName} est choisi car il a le moins de creneaux (${globalBefore} global, ${dayBefore} sur la journee).'
   ];
 }
 
 function buildUncoveredReasons(removedAgentName: string, date: string): string[] {
   return [
-    `Reaffectation automatique: ${removedAgentName} est retire(e) de la journee ${formatDisplayDate(date)}.`,
+    'Reaffectation automatique: ${removedAgentName} est retire(e) de la journee ${formatDisplayDate(date)}.',
     "Aucun autre agent eligible n'etait disponible pour ce creneau."
   ];
 }
@@ -117,6 +127,7 @@ function compareCandidateReason(a: CandidateReason, b: CandidateReason): number 
   for (let index = 0; index < Math.max(a.decisionRank.length, b.decisionRank.length); index += 1) {
     const left = a.decisionRank[index] ?? 0;
     const right = b.decisionRank[index] ?? 0;
+
     if (left !== right) {
       return left - right;
     }
@@ -125,8 +136,35 @@ function compareCandidateReason(a: CandidateReason, b: CandidateReason): number 
   return a.agentName.localeCompare(b.agentName, "fr");
 }
 
+function buildSlotsFromOpenTime(parsedSchedule: ParsedSchedule, settings: RotationSettings) {
+  const allSlots = buildRotationSlots(settings.startTime, settings.endTime, settings.slotMinutes);
+
+  return allSlots.filter((slot) => {
+    return parsedSchedule.dates.some((date) => {
+      return parsedSchedule.agents.some((agent) => {
+        const day = agent.days[date];
+
+        if (!day) {
+          return false;
+        }
+
+        return day.intervals.some((interval) => {
+          const normalizedActivity = interval.normalizedActivity || normalizeActivityLabel(interval.activity);
+
+          if (normalizedActivity !== OPEN_TIME_ACTIVITY) {
+            return false;
+          }
+
+          return rangeContains(interval.start, interval.end, slot.start, slot.end);
+        });
+      });
+    });
+  });
+}
+
 export function summarizeRotation(cells: RotationCell[], agents: AgentSchedule[]): RotationSummary {
   const activeCells = cells.filter((cell) => cell.status !== "disabled" && cell.status !== "holiday");
+
   const agentSummaries = agents.map((agent) => {
     const assignedCells = activeCells.filter((cell) => cell.assignedAgentName === agent.displayName);
     const slotsByDate = assignedCells.reduce<Record<string, number>>((acc, cell) => {
@@ -154,15 +192,14 @@ export function summarizeRotation(cells: RotationCell[], agents: AgentSchedule[]
   }));
 
   const uncoveredSlots = activeCells.filter((cell) => cell.status === "uncovered").length;
-  const fairnessScore = slotCounts.length
-    ? Math.max(0, Math.round(100 - (deviation / Math.max(avg || 1, 1)) * 100))
-    : 100;
+  const fairnessScore = slotCounts.length ? Math.max(0, Math.round(100 - (deviation / Math.max(avg || 1, 1)) * 100)) : 100;
+
   const alerts = flagged
     .filter((summary) => summary.overload)
-    .map((summary) => `${summary.agentName} recoit plus de creneaux que la moyenne (${summary.totalSlots}).`);
+    .map((summary) => '${summary.agentName} recoit plus de creneaux que la moyenne (${summary.totalSlots}).');
 
   if (uncoveredSlots > 0) {
-    alerts.push(`${uncoveredSlots} creneau(x) restent non couverts.`);
+    alerts.push('${uncoveredSlots} creneau(x) restent non couverts.');
   }
 
   return {
@@ -187,6 +224,7 @@ export function removeAgentForDate(
   const slotRank = new Map(rotation.slots.map((slot, index) => [slot, index]));
   const nextCells = [...rotation.cells];
   const counters = buildAssignmentCounters(nextCells);
+
   const removedAgentName =
     agents.find((agent) => resolveAgentKey(agent.agentId, agent.displayName) === removedAgentKey)?.displayName ??
     nextCells.find((cell) => resolveAgentKey(cell.assignedAgentId, cell.assignedAgentName) === removedAgentKey)
@@ -199,6 +237,7 @@ export function removeAgentForDate(
       if (cell.date !== date || cell.status === "disabled" || cell.status === "holiday") {
         return false;
       }
+
       return resolveAgentKey(cell.assignedAgentId, cell.assignedAgentName) === removedAgentKey;
     })
     .sort((left, right) => (slotRank.get(left.cell.slotStart) ?? 0) - (slotRank.get(right.cell.slotStart) ?? 0))
@@ -210,6 +249,7 @@ export function removeAgentForDate(
 
   for (const index of targetIndices) {
     const currentCell = nextCells[index];
+
     if (!currentCell) {
       continue;
     }
@@ -235,8 +275,10 @@ export function removeAgentForDate(
       });
 
     const replacement = eligibleReplacements[0];
+
     if (!replacement) {
       const { manualOverride: _manualOverride, ...baseCell } = currentCell;
+
       nextCells[index] = {
         ...baseCell,
         assignedAgentId: null,
@@ -244,6 +286,7 @@ export function removeAgentForDate(
         status: "uncovered",
         reasons: buildUncoveredReasons(removedAgentName, date)
       };
+
       continue;
     }
 
@@ -276,15 +319,11 @@ export function generateRotation(
   parsedSchedule: ParsedSchedule,
   inputSettings: Partial<RotationSettings> = {}
 ): RotationResult {
-  const settings: RotationSettings = {
-    ...DEFAULT_SETTINGS,
-    ...inputSettings
-  };
+  const settings: RotationSettings = { ...DEFAULT_SETTINGS, ...inputSettings };
   const dates = parsedSchedule.dates;
-  const slots = buildRotationSlots(settings.startTime, settings.endTime, settings.slotMinutes);
+  const slots = buildSlotsFromOpenTime(parsedSchedule, settings);
   const counters = new Map<string, MutableCounter>();
   const cells: RotationCell[] = [];
-
   let previousAgentId: string | null = null;
 
   for (const date of dates) {
@@ -333,7 +372,7 @@ export function generateRotation(
             ...baseCell,
             assignedAgentName: "Ferie",
             status: "holiday",
-            reasons: [`Jour ferie en France: ${holidayName}.`],
+            reasons: ['Jour ferie en France: ${holidayName}.'],
             holidayOverride: {
               holidayName,
               cancelled: false,
@@ -348,6 +387,7 @@ export function generateRotation(
               }
             }
           });
+
           previousAgentId = null;
           continue;
         }
@@ -365,8 +405,8 @@ export function generateRotation(
         assignedAgentName: selected.agentName,
         status: "assigned",
         reasons: [
-          `${selected.agentName} est choisi car il a le moins de creneaux globaux.`,
-          `${selected.agentName} a ${selected.dayAssignedBefore} creneau(x) sur la journee avant affectation.`,
+          '${selected.agentName} est choisi car il a le moins de creneaux globaux.',
+          '${selected.agentName} a ${selected.dayAssignedBefore} creneau(x) sur la journee avant affectation.',
           selected.previousSlotAssigned
             ? "Aucune meilleure alternative n'evitait la repetition consecutive."
             : "Une repetition consecutive a ete evitee."
@@ -380,7 +420,7 @@ export function generateRotation(
           assignedAgentId: null,
           assignedAgentName: "Ferie",
           status: "holiday",
-          reasons: [`Jour ferie en France: ${holidayName}.`],
+          reasons: ['Jour ferie en France: ${holidayName}.'],
           holidayOverride: {
             holidayName,
             cancelled: false,
@@ -395,13 +435,13 @@ export function generateRotation(
             }
           }
         });
+
         previousAgentId = null;
         continue;
       }
 
-      const counterKey = parsedSchedule.agents.find(
-        (agent) => agent.displayName === selected.agentName
-      )?.normalizedName;
+      const counterKey = parsedSchedule.agents.find((agent) => agent.displayName === selected.agentName)?.normalizedName;
+
       if (counterKey) {
         const counter = counters.get(counterKey) ?? { total: 0, byDate: {} };
         counter.total += 1;
@@ -442,10 +482,12 @@ export function toClipboardTable(rotation: RotationResult): string {
 
   for (const slot of rotation.slots) {
     const row = [slot];
+
     for (const date of rotation.dates) {
       const cell = rotation.cells.find((item) => item.date === date && item.slotStart === slot);
       row.push(cell?.assignedAgentName ?? "");
     }
+
     lines.push(row.join("\t"));
   }
 
