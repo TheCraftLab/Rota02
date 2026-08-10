@@ -1071,25 +1071,31 @@ export default function App() {
           <section className="panel-surface rounded-4xl border border-gray-100 p-10 text-center shadow-panel">
             <p className="text-base font-medium text-ink">Chargement de la rotation publiee...</p>
           </section>
-        ) : published?.rotation ? (
-          <div className="grid gap-5">
-            <RotationTable
-              rotation={published.rotation}
-              selectedCellKey={null}
-              interactive={false}
-              title="Rotation chat"
-              description={`Publication du ${formatPublishedAt(published.publishedAt)}`}
-              density="kiosk"
-            />
-          </div>
-        ) : (
-          <section className="panel-surface rounded-4xl border border-gray-100 p-10 text-center shadow-panel">
-            <p className="text-base font-medium text-ink">Aucune rotation n'est encore publiee.</p>
-            <p className="mt-2 text-sm text-slate">
-              Passez par l'administration pour importer un fichier NICE WFM, generer une rotation puis la publier.
-            </p>
-          </section>
-        )}
+        ) : published?.rotation &&
+    published.rotation.dates.length > 0 &&
+    published.rotation.cells.length > 0 ? (
+  <div className="grid gap-5">
+    <RotationTable
+      rotation={published.rotation}
+      selectedCellKey={null}
+      interactive={false}
+      title="Rotation chat"
+      description={'Publication du ${formatPublishedAt(published.publishedAt)}'}
+      density="kiosk"
+    />
+  </div>
+) : (
+  <section className="panel-surface rounded-4xl border border-gray-100 p-10 text-center shadow-panel">
+    <p className="text-base font-medium text-ink">
+      Aucun planning actif pour le moment.
+    </p>
+    <p className="mt-2 text-sm text-slate">
+      La rotation publiee est vide ou ne contient plus de dates futures.
+      Passez par l'administration pour importer un fichier NICE WFM,
+      generer une nouvelle rotation puis la publier.
+    </p>
+  </section>
+)}
 
         <footer className="mt-8 border-t border-gray-100 px-2 pt-5 text-sm text-slate/60">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
