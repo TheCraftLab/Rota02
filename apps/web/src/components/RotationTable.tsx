@@ -13,7 +13,7 @@ interface RotationTableProps {
 }
 
 function cellKey(cell: RotationCell): string {
-  return '${cell.date}-${cell.slotStart}';
+  return `${cell.date}-${cell.slotStart}`;
 }
 
 function isDisplayableCell(cell: RotationCell | undefined): boolean {
