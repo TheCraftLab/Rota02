@@ -101,27 +101,23 @@ export function RotationTable({
 
       <div className="grid-table max-w-full overflow-x-auto overflow-y-auto rounded-3xl border border-slate/10 bg-white/80">
         <table className={'min-w-max w-full border-separate border-spacing-0 text-left ${isKiosk ? "text-base" : "text-sm"}'}>
-          <thead className={'sticky top-0 z-10 ${isKiosk ? "bg-ink" : "bg-sand"}'}>
+          <thead className="sticky top-0 z-10 bg-sand">
             <tr>
-              <th
-                className={`sticky left-0 z-30 min-w-[88px] border-b border-r border-slate/10 px-4 font-semibold shadow-[6px_0_8px_-8px_rgba(15,25,35,0.4)] ${
-                  isKiosk ? "bg-ink py-4 text-white" : "bg-sand py-3 text-ink"
-                }`}
-              >
+              <th className="sticky left-0 z-30 min-w-[88px] border-b border-r border-slate/10 bg-sand px-4 py-3 font-semibold text-ink shadow-[6px_0_8px_-8px_rgba(15,25,35,0.4)]">
                 Heure
               </th>
-
+          
               {rotation.dates.map((date) => (
                 <th
                   key={date}
-                  className={`min-w-[180px] border-b border-slate/10 px-4 font-semibold ${
-                    isKiosk ? "py-4 text-white" : "py-3 text-ink"
-                  }`}
+                  className="min-w-[180px] border-b border-slate/10 px-4 py-3 font-semibold text-ink"
                 >
-                  <div className={'uppercase tracking-[0.12em] ${isKiosk ? "text-sm text-white/70" : "text-xs text-slate/70"}'}>
+                  <div className="text-xs uppercase tracking-[0.12em] text-slate/70">
                     {formatWeekday(date)}
                   </div>
-                  <div className="mt-1">{formatDisplayDate(date)}</div>
+                  <div className="mt-1 text-base font-bold text-ink">
+                    {formatDisplayDate(date)}
+                  </div>
                 </th>
               ))}
             </tr>
