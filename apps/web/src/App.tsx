@@ -1037,85 +1037,111 @@ export default function App() {
   }
 
   if (!isAdminRoute) {
-    return (
-      <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
-        <header className="mb-6">
-          <div className="panel-surface rounded-4xl border border-gray-100 px-6 py-5 shadow-panel">
-            <p className="text-xs font-medium uppercase tracking-widest text-slate/50">
-              Atelier11.app
-            </p>
-        
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-              Planning Chat
-            </h1>
-        
-            <p className="mt-2 text-sm font-medium text-slate">
-              Nous sommes le{" "}
-              {new Intl.DateTimeFormat("fr-FR", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                year: "numeric"
-              }).format(new Date())}
-            </p>
+  return (
+    <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
+      <header className="mb-6">
+        <div className="relative overflow-hidden rounded-5xl border border-white/70 bg-white/85 px-6 py-6 shadow-panel backdrop-blur-xl sm:px-8 sm:py-7">
+          <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-amber/20 blur-3xl" />
+          <div className="absolute -bottom-20 left-10 h-48 w-48 rounded-full bg-mint/15 blur-3xl" />
+
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate/10 bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate/70 shadow-sm">
+                <span className="h-2 w-2 rounded-full bg-mint" />
+                Atelier11.app
+              </div>
+
+              <h1 className="mt-4 text-4xl font-bold tracking-tight text-ink sm:text-5xl">
+                Planning Chat
+              </h1>
+
+              <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate sm:text-base">
+                Rotation publiée pour les créneaux de chat. Consultez les affectations par jour et par heure.
+              </p>
+            </div>
+
+            <div className="grid gap-2 rounded-3xl border border-slate/10 bg-white/75 p-4 shadow-sm sm:min-w-[280px]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate/60">
+                Aujourd’hui
+              </p>
+
+              <p className="text-lg font-bold capitalize text-ink">
+                {new Intl.DateTimeFormat("fr-FR", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric"
+                }).format(new Date())}
+              </p>
+
+              {published?.publishedAt ? (
+                <p className="text-sm text-slate">
+                  Dernière mise à jour :{" "}
+                  <span className="font-semibold text-ink">
+                    {formatPublishedAt(published.publishedAt)}
+                  </span>
+                </p>
+              ) : null}
+            </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {error ? (
-          <div className="mb-5 rounded-xl border border-coral/20 bg-coral/8 px-4 py-3 text-sm text-coral">
-            {error}
-          </div>
-        ) : null}
+      {error ? (
+        <div className="mb-5 rounded-2xl border border-coral/20 bg-coral/10 px-4 py-3 text-sm font-medium text-coral shadow-sm">
+          {error}
+        </div>
+      ) : null}
 
-        {publicLoading ? (
-          <section className="panel-surface rounded-4xl border border-gray-100 p-10 text-center shadow-panel">
-            <p className="text-base font-medium text-ink">Chargement de la rotation publiee...</p>
-          </section>
-        ) : published?.rotation &&
-    published.rotation.dates.length > 0 &&
-    published.rotation.cells.length > 0 ? (
-  <div className="grid gap-5">
-    <RotationTable
-      rotation={published.rotation}
-      selectedCellKey={null}
-      interactive={false}
-      title="Rotation chat"
-      description={`Publication du ${formatPublishedAt(published.publishedAt)}`}
-      density="kiosk"
-    />
-  </div>
-) : (
-  <section className="panel-surface rounded-4xl border border-gray-100 p-10 text-center shadow-panel">
-    <p className="text-base font-medium text-ink">
-      Aucun planning actif pour le moment.
-    </p>
-    <p className="mt-2 text-sm text-slate">
-      La rotation publiee est vide ou ne contient plus de dates futures.
-      Passez par l'administration pour importer un fichier NICE WFM,
-      generer une nouvelle rotation puis la publier.
-    </p>
-  </section>
-)}
+      {publicLoading ? (
+        <section className="panel-surface rounded-5xl border border-white/70 p-10 text-center shadow-panel">
+          <p className="text-base font-medium text-ink">
+            Chargement de la rotation publiée...
+          </p>
+        </section>
+      ) : published?.rotation && published.rotation.dates.length > 0 && published.rotation.cells.length > 0 ? (
+        <div className="grid gap-5">
+          <RotationTable
+            rotation={published.rotation}
+            selectedCellKey={null}
+            interactive={false}
+            title="Rotation chat"
+            description={'Publication du ${formatPublishedAt(published.publishedAt)}'}
+            density="kiosk"
+          />
+        </div>
+      ) : (
+        <section className="panel-surface rounded-5xl border border-white/70 p-10 text-center shadow-panel">
+          <p className="text-base font-semibold text-ink">
+            Aucun planning actif pour le moment.
+          </p>
 
-        <footer className="mt-8 border-t border-gray-100 px-2 pt-5 text-sm text-slate/60">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p>© {new Date().getFullYear()} Atelier11.app</p>
-            {published?.publishedAt ? (
-              <p>Derniere mise a jour : {formatPublishedAt(published.publishedAt)}</p>
-            ) : null}
-            <button
-              type="button"
-              className="text-left text-sm font-medium text-slate underline underline-offset-4 hover:text-ink sm:text-right"
-              onClick={() => navigateTo("/admin", setPathname)}
-            >
-              Acces administration
-            </button>
-          </div>
-        </footer>
-      </main>
-    );
-  }
+          <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate">
+            La rotation publiée est vide ou ne contient plus de dates futures. Passez par l'administration pour importer un fichier NICE WFM, générer une nouvelle rotation puis la publier.
+          </p>
+        </section>
+      )}
 
+      <footer className="mt-8 border-t border-slate/10 px-2 pt-5 text-sm text-slate/70">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p>© {new Date().getFullYear()} Atelier11.app</p>
+
+          {published?.publishedAt ? (
+            <p>Dernière mise à jour : {formatPublishedAt(published.publishedAt)}</p>
+          ) : null}
+
+          <button
+            type="button"
+            className="text-left text-sm font-semibold text-slate underline underline-offset-4 transition hover:text-ink sm:text-right"
+            onClick={() => navigateTo("/admin", setPathname)}
+          >
+            Accès administration
+          </button>
+        </div>
+      </footer>
+    </main>
+  );
+}
   return (
     <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
       <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
