@@ -16,6 +16,19 @@ function cellKey(cell: RotationCell): string {
   return '${cell.date}-${cell.slotStart}';
 }
 
+function isDisplayableCell(cell: RotationCell | undefined): boolean {
+  if (!cell) return false;
+
+  if (cell.status === "holiday") return true;
+  if (cell.status === "manual") return true;
+  if (cell.status === "disabled") return true;
+  if (cell.status === "uncovered") return true;
+
+  const agentName = cell.assignedAgentName?.trim();
+
+  return Boolean(agentName);
+}
+
 export function RotationTable({
   rotation,
   selectedCellKey,
@@ -28,7 +41,14 @@ export function RotationTable({
 }: RotationTableProps) {
   const isKiosk = density === "kiosk";
 
-  if (rotation.slots.length === 0) {
+  const visibleSlots = rotation.slots.filter((slot) =>
+    rotation.dates.some((date) => {
+      const cell = rotation.cells.find((item) => item.date === date && item.slotStart === slot);
+      return isDisplayableCell(cell);
+    })
+  );
+
+  if (visibleSlots.length === 0) {
     return (
       <section className="panel-surface layout-safe overflow-hidden rounded-4xl border border-white/70 p-6 shadow-panel">
         <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
@@ -46,7 +66,7 @@ export function RotationTable({
             Aucun créneau à afficher pour cette rotation.
           </div>
           <p className={'mt-2 text-slate ${isKiosk ? "text-base" : "text-sm"}'}>
-            Aucun créneau Open Time ne couvre les horaires configurés. Vérifiez le fichier importé ou ajustez les
+            Aucun créneau actif ne couvre les horaires configurés. Vérifiez le fichier importé ou ajustez les
             paramètres de début, de fin et de durée des créneaux.
           </p>
         </div>
@@ -62,7 +82,9 @@ export function RotationTable({
       <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate/70">Tableau</p>
-          <h2 className={'mt-2 font-semibold text-ink ${isKiosk ? "text-3xl sm:text-4xl" : "text-2xl"}'}>{title}</h2>
+          <h2 className={'mt-2 font-semibold text-ink ${isKiosk ? "text-3xl sm:text-4xl" : "text-2xl"}'}>
+            {title}
+          </h2>
           <p className={'mt-2 text-slate ${isKiosk ? "text-base" : "text-sm"}'}>{description}</p>
         </div>
 
@@ -72,7 +94,7 @@ export function RotationTable({
               <StatusBadge tone="warning">{manualCount} modification(s) manuelle(s) en jaune</StatusBadge>
             ) : null}
 
-            {holidayCount > 0 ? <StatusBadge tone="neutral">{holidayCount} creneau(x) ferie(s)</StatusBadge> : null}
+            {holidayCount > 0 ? <StatusBadge tone="neutral">{holidayCount} créneau(x) férié(s)</StatusBadge> : null}
           </div>
         ) : null}
       </div>
@@ -106,7 +128,7 @@ export function RotationTable({
           </thead>
 
           <tbody>
-            {rotation.slots.map((slot) => (
+            {visibleSlots.map((slot) => (
               <tr key={slot}>
                 <td
                   className={`sticky left-0 z-20 min-w-[88px] border-b border-r border-slate/10 px-4 font-semibold shadow-[6px_0_8px_-8px_rgba(15,25,35,0.25)] ${
@@ -155,8 +177,8 @@ export function RotationTable({
                             <button
                               type="button"
                               className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/70 bg-white/90 text-sm font-semibold text-slate shadow-sm transition hover:bg-white"
-                              title={cell.status === "disabled" ? "Retablir ce creneau" : "Liberer ce creneau"}
-                              aria-label={cell.status === "disabled" ? "Retablir ce creneau" : "Liberer ce creneau"}
+                              title={cell.status === "disabled" ? "Rétablir ce créneau" : "Libérer ce créneau"}
+                              aria-label={cell.status === "disabled" ? "Rétablir ce créneau" : "Libérer ce créneau"}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 onToggleDisabled(cell);
