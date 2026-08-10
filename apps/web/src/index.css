@@ -4,39 +4,97 @@
 
 :root {
   color-scheme: light;
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-  background-color: #f2f4f7;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(212, 145, 60, 0.18), transparent 34rem),
+    radial-gradient(circle at top right, rgba(78, 144, 112, 0.14), transparent 30rem),
+    linear-gradient(135deg, #f7f4ef 0%, #eef3f8 48%, #f8fafc 100%);
   color: #0f1923;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: #f4f7fb;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.85)),
+    transparent;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 #root {
   min-height: 100vh;
 }
 
+/* Surface principale des cartes */
 .panel-surface {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
+/* Sécurité layout */
 .layout-safe {
   min-width: 0;
 }
 
+/* Scrollbar tableau */
 .grid-table {
   scrollbar-width: thin;
-  scrollbar-color: rgba(74, 98, 120, 0.25) transparent;
+  scrollbar-color: rgba(74, 98, 120, 0.28) transparent;
 }
 
 .grid-table::-webkit-scrollbar {
-  height: 6px;
-  width: 6px;
+  height: 8px;
+  width: 8px;
+}
+
+.grid-table::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .grid-table::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(74, 98, 120, 0.2);
+  background: rgba(74, 98, 120, 0.24);
+}
+
+.grid-table::-webkit-scrollbar-thumb:hover {
+  background: rgba(74, 98, 120, 0.38);
+}
+
+/* Amélioration générale des boutons */
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Meilleure sélection clavier */
+:focus-visible {
+  outline: 3px solid rgba(212, 145, 60, 0.38);
+  outline-offset: 2px;
+}
+
+/* Impression/export écran si besoin */
+@media print {
+  body {
+    background: white;
+  }
+
+  .panel-surface {
+    background: white;
+    box-shadow: none !important;
+    border-color: #e5e7eb !important;
+  }
 }
