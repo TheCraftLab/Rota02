@@ -1041,8 +1041,23 @@ export default function App() {
       <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
         <header className="mb-6">
           <div className="panel-surface rounded-4xl border border-gray-100 px-6 py-5 shadow-panel">
-            <p className="text-xs font-medium uppercase tracking-widest text-slate/50">Atelier11.app</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">Planning Chat</h1>
+            <p className="text-xs font-medium uppercase tracking-widest text-slate/50">
+              Atelier11.app
+            </p>
+        
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+              Planning Chat
+            </h1>
+        
+            <p className="mt-2 text-sm font-medium text-slate">
+              Nous sommes le{" "}
+              {new Intl.DateTimeFormat("fr-FR", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric"
+              }).format(new Date())}
+            </p>
           </div>
         </header>
 
