@@ -1106,7 +1106,7 @@ export default function App() {
             selectedCellKey={null}
             interactive={false}
             title="Rotation chat"
-            description={'Publication du ${formatPublishedAt(published.publishedAt)}'}
+            description={`Publication du ${formatPublishedAt(published.publishedAt)}`}
             density="kiosk"
           />
         </div>
