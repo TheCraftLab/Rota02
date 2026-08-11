@@ -3,13 +3,13 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(212, 145, 60, 0.18), transparent 34rem),
-    radial-gradient(circle at top right, rgba(78, 144, 112, 0.14), transparent 30rem),
-    linear-gradient(135deg, #f7f4ef 0%, #eef3f8 48%, #f8fafc 100%);
-  color: #0f1923;
+    radial-gradient(circle at top left, rgba(212, 145, 60, 0.22), transparent 34rem),
+    radial-gradient(circle at top right, rgba(78, 144, 112, 0.20), transparent 30rem),
+    linear-gradient(135deg, #0f1923 0%, #172331 50%, #263746 100%);
+  color: #f8fafc;
 }
 
 * {
