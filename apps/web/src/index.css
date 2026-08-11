@@ -2,31 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================================
+   Design global moderne — Rota Chat Generator
+   Fond sombre premium + surfaces glassmorphism
+   ========================================================= */
+
 :root {
-  color-scheme: dark;
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  color-scheme: light;
+
+  font-family:
+    "Inter",
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+
+  color: #0f1923;
+
   background:
-    radial-gradient(circle at top left, rgba(212, 145, 60, 0.22), transparent 34rem),
-    radial-gradient(circle at top right, rgba(78, 144, 112, 0.20), transparent 30rem),
-    linear-gradient(135deg, #0f1923 0%, #172331 50%, #263746 100%);
-  color: #f8fafc;
+    radial-gradient(circle at 12% 8%, rgba(212, 145, 60, 0.28), transparent 28rem),
+    radial-gradient(circle at 88% 12%, rgba(78, 144, 112, 0.24), transparent 30rem),
+    radial-gradient(circle at 50% 100%, rgba(59, 130, 246, 0.18), transparent 34rem),
+    linear-gradient(135deg, #0b1220 0%, #111827 45%, #172033 100%);
 }
 
+/* Reset propre */
 * {
   box-sizing: border-box;
 }
 
 html {
   min-height: 100%;
-  background: #f4f7fb;
+  background:
+    radial-gradient(circle at top left, rgba(212, 145, 60, 0.16), transparent 32rem),
+    radial-gradient(circle at top right, rgba(78, 144, 112, 0.14), transparent 30rem),
+    linear-gradient(135deg, #0b1220 0%, #111827 48%, #172033 100%);
+  scroll-behavior: smooth;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
+
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.85)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
     transparent;
+
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -35,11 +57,20 @@ body {
   min-height: 100vh;
 }
 
+/* =========================================================
+   Surfaces principales
+   ========================================================= */
+
 /* Surface principale des cartes */
 .panel-surface {
-  background: rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.86));
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.18),
+    0 1px 2px rgba(15, 25, 35, 0.08);
 }
 
 /* Sécurité layout */
@@ -47,15 +78,77 @@ body {
   min-width: 0;
 }
 
-/* Scrollbar tableau */
+/* =========================================================
+   Amélioration visuelle des éléments Tailwind déjà présents
+   ========================================================= */
+
+/* Cartes blanches et zones translucides */
+.bg-white,
+.bg-white\/75,
+.bg-white\/85 {
+  box-shadow:
+    0 12px 35px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+/* Effet doux sur les blocs arrondis */
+.rounded-4xl,
+.rounded-5xl,
+.rounded-3xl,
+.rounded-2xl {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+/* Boutons */
+button {
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Inputs, selects, textarea */
+input,
+select,
+textarea {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+/* =========================================================
+   Scrollbar moderne
+   ========================================================= */
+
 .grid-table {
   scrollbar-width: thin;
-  scrollbar-color: rgba(74, 98, 120, 0.28) transparent;
+  scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
 }
 
 .grid-table::-webkit-scrollbar {
-  height: 8px;
-  width: 8px;
+  height: 10px;
+  width: 10px;
 }
 
 .grid-table::-webkit-scrollbar-track {
@@ -64,37 +157,120 @@ body {
 
 .grid-table::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(74, 98, 120, 0.24);
+  background:
+    linear-gradient(180deg, rgba(148, 163, 184, 0.52), rgba(100, 116, 139, 0.42));
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .grid-table::-webkit-scrollbar-thumb:hover {
-  background: rgba(74, 98, 120, 0.38);
+  background:
+    linear-gradient(180deg, rgba(212, 145, 60, 0.75), rgba(78, 144, 112, 0.65));
+  background-clip: padding-box;
 }
 
-/* Amélioration générale des boutons */
-button {
-  cursor: pointer;
+/* Scrollbar globale */
+body::-webkit-scrollbar {
+  width: 10px;
 }
 
-button:disabled {
-  cursor: not-allowed;
+body::-webkit-scrollbar-track {
+  background: #0b1220;
 }
 
-/* Meilleure sélection clavier */
+body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.45);
+  border: 2px solid #0b1220;
+}
+
+body::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 145, 60, 0.75);
+}
+
+/* =========================================================
+   Focus clavier / accessibilité
+   ========================================================= */
+
 :focus-visible {
-  outline: 3px solid rgba(212, 145, 60, 0.38);
-  outline-offset: 2px;
+  outline: 3px solid rgba(212, 145, 60, 0.42);
+  outline-offset: 3px;
 }
 
-/* Impression/export écran si besoin */
-@media print {
+/* Sélection de texte */
+::selection {
+  background: rgba(212, 145, 60, 0.28);
+  color: #0f1923;
+}
+
+/* =========================================================
+   Effets visuels subtils
+   ========================================================= */
+
+/* Donne une sensation plus moderne aux headers/cards translucides */
+header .relative.overflow-hidden {
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* Améliore la lisibilité des tableaux */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Images et médias */
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+/* =========================================================
+   Responsive
+   ========================================================= */
+
+@media (max-width: 640px) {
   body {
-    background: white;
+    background:
+      radial-gradient(circle at top, rgba(212, 145, 60, 0.12), transparent 24rem),
+      linear-gradient(135deg, #0b1220 0%, #111827 100%);
   }
 
   .panel-surface {
-    background: white;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+}
+
+/* =========================================================
+   Impression/export écran si besoin
+   ========================================================= */
+
+@media print {
+  :root,
+  html,
+  body {
+    background: white !important;
+    color: #111827 !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .panel-surface {
+    background: white !important;
     box-shadow: none !important;
     border-color: #e5e7eb !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  button {
+    box-shadow: none !important;
   }
 }
